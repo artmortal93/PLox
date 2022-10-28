@@ -3,7 +3,7 @@ from PLoxScanner import Scanner
 
 class PLox(object):
     def __init__(self):
-        super.__init__()
+        super().__init__()
         self.data=None
         hadError=False
         
@@ -18,7 +18,9 @@ class PLox(object):
         while True:
             print(">", end='')
             line=input()
+            #print(len(line))
             if(len(line)==0):
+                print("Leaving REPL Mode...")
                 break
             self.run(line)
             PLox.hadError=False

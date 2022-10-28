@@ -34,6 +34,9 @@
     <Compile Include="PLoxScanner.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="PLoxTest.py">
+      <SubType>Code</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Content Include="code.plox" />

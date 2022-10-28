@@ -1,5 +1,5 @@
 from PLoxDef import TokenType,Token
-from PLox import PLox
+import PLox #solve circular import
 
 
 keywords={
@@ -95,7 +95,7 @@ class Scanner(object):
             elif self.isAlpha(c):
                 self.identifier()
             else:
-                PLox.error(self.line,"Unexpecterd Character.")
+                PLox.PLox.error(self.line,"Unexpecterd Character.")
                 
    #utility functions
     def match(self,expected:str)->bool:
@@ -136,7 +136,7 @@ class Scanner(object):
              PLox.error(self.line,"Unterminated string.")
              return
         self.advance()
-        value=self.source[self.start+1,self.current-1] #trim the ""
+        value=self.source[self.start+1:self.current-1] #trim the ""
         self.addToken(TokenType.STRING,value)
 
     def isDigit(self,c:str)->bool:
@@ -146,7 +146,7 @@ class Scanner(object):
         return (c>='a' and c<='z') or (c>='A' and c<='Z') or c=='_'
 
     def isAlphaNumeric(self,c:str)->bool:
-        return self.isAlpha(c) or self.isAlphaNumeric(c)
+        return self.isAlpha(c) or self.isDigit(c)
 
     def number(self):
         while self.isDigit(self.peek()):
@@ -155,14 +155,14 @@ class Scanner(object):
             self.advance()
             while self.isDigit(self.peek()):
                 self.advance()
-        self.addToken(TokenType.Number,float(self.source[self.start:self.current]))
+        self.addToken(TokenType.NUMBER,float(self.source[self.start:self.current]))
     #utility functions end
 
     def identifier(self):
         while self.isAlphaNumeric(self.peek()):
             self.advance()
         text=self.source[self.start:self.current]
-        type=keywords["text"]
+        type=keywords.get(text)
         if type is None:
             type=TokenType.IDENTIFER
         self.addToken(type)

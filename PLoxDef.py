@@ -54,13 +54,15 @@ class Token(object):
         self.literal=literal
         self.line=line
 
-    def toString(self)->str:
+    def __str__(self)->str:
         return str(self.type)+" "+self.lexeme+" "+str(self.literal)
 
 
 
 class Expr(ABC):
-    pass
+    @abstractmethod
+    def accept(self,visitor):
+        pass
 
 class Binary(Expr): 
     def __init__(self,left:Expr,operator:Token,right:Expr):
@@ -68,18 +70,79 @@ class Binary(Expr):
         self.operator=operator
         self.right=right
 
+    def accept(self,visitor):
+        return visitor.visitBinaryExpr(self)
+
+
 class Grouping(Expr): 
     def __init__(self,expression:Expr):
         self.expression=expression
+
+    def accept(self,visitor):
+        return visitor.visitGroupingExpr(self)
 
 class Literal(Expr): 
     def __init__(self,value:object):
         self.value=value
 
+    def accept(self,visitor):
+        return visitor.visitLiteralExpr(self)
+
 class Unary(Expr): 
     def __init__(self,operator:Token,right:Expr):
         self.operator=operator
         self.right=right
+
+    def accept(self,visitor):
+        return visitor.visitUnaryExpr(self)
+
+class Visitor(ABC):
+    @abstractmethod
+    def visitBinaryExpr(self,Expr):
+        pass
+
+    @abstractmethod
+    def visitGroupingExpr(self,Expr):
+        pass
+
+    @abstractmethod
+    def visitLiteralExpr(self,Expr):
+        pass
+
+    @abstractmethod
+    def visitUnaryExpr(self,Expr):
+        pass
+
+class ASTPrinter(Visitor):
+    #=interprete method
+    def print(self,expr:Expr):
+        return expr.accept(self)
+
+    def visitBinaryExpr(self, expr:Binary):
+        return self.parenthesize(self.expr.operator.lexeme,expr.left,expr.right)
+        
+
+    def visitGroupingExpr(self, expr:Grouping):
+        return self.parenthesize('group',expr.expression)
+
+    def visitLiteralExpr(self, expr:Literal):
+        if (expr.value==None):
+            return "nil"
+        return str(expr.value)
+
+    def visitUnaryExpr(self, expr:Unary):
+        return self.parenthesize(expr.operator.lexeme,expr.right)
+    
+    def parenthesize(self,name:str,*exprs):
+        output='('
+        for expr in exprs:
+            output+=' '
+            output+=expr.accept(self) #recurive here
+        output+=')'
+        return output
+
+
+
 
 
 
