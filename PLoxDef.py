@@ -1,5 +1,6 @@
 
 from enum import Enum
+from abc import ABC, abstractmethod
 
 class TokenType(Enum):
      LEFT_PAREN=1
@@ -46,14 +47,7 @@ class TokenType(Enum):
      EOF=39
 
 #store token information
-class Token(Object):
-    def __init__(self):
-        super.__init__()
-        self.type=TokenType()
-        self.lexeme=str()
-        self.literal=object()
-        self.line=None
-
+class Token(object):
     def __init__(self,type:TokenType,lexeme:str,literal,line:int):
         self.type=type
         self.lexeme=lexeme
@@ -62,5 +56,30 @@ class Token(Object):
 
     def toString(self)->str:
         return str(self.type)+" "+self.lexeme+" "+str(self.literal)
+
+
+
+class Expr(ABC):
+    pass
+
+class Binary(Expr): 
+    def __init__(self,left:Expr,operator:Token,right:Expr):
+        self.left=left
+        self.operator=operator
+        self.right=right
+
+class Grouping(Expr): 
+    def __init__(self,expression:Expr):
+        self.expression=expression
+
+class Literal(Expr): 
+    def __init__(self,value:object):
+        self.value=value
+
+class Unary(Expr): 
+    def __init__(self,operator:Token,right:Expr):
+        self.operator=operator
+        self.right=right
+
 
 

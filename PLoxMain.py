@@ -1,9 +1,10 @@
 import sys
 from PLoxDef import TokenType,Token
+from PLox import PLox
 
 if __name__ == "__main__":
     entrylist=sys.argv
-    plox=Plox()
+    plox=PLox()
     if len(entrylist)>2:
         print("Usage: plox [script]")
         exit()

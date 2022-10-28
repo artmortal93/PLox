@@ -6,7 +6,7 @@ keywords={
     'and':TokenType.AND,
     'class':TokenType.CLASS,
     'else':TokenType.ELSE,
-    'fasle':TokenType.FALSE,
+    'false':TokenType.FALSE,
     'for':TokenType.FOR,
     'fun':TokenType.FUN,
     'if':TokenType.IF,
@@ -47,9 +47,9 @@ class Scanner(object):
         elif c=='-':
             self.addToken(TokenType.MINUS)
         elif c=='+':
-            seld.addToken(TokenType.PLUS)
+            self.addToken(TokenType.PLUS)
         elif c==';':
-            self.addToken(TokenType.SEMICOgtdLON)
+            self.addToken(TokenType.SEMICOLON)
         elif c=='*':
             self.addToken(TokenType.STAR)
         #case of one char above
@@ -95,7 +95,7 @@ class Scanner(object):
             elif self.isAlpha(c):
                 self.identifier()
             else:
-                PLox.error(line,"Unexpecterd Character.")
+                PLox.error(self.line,"Unexpecterd Character.")
                 
    #utility functions
     def match(self,expected:str)->bool:
@@ -110,8 +110,8 @@ class Scanner(object):
         return self.current>=len(self.source)
 
     def advance(self)->str:
-        current+=1
-        return source[current-1]
+        self.current+=1
+        return self.source[self.current-1]
 
     #advance but do not consumer the character
     def peek(self)->str:
@@ -124,7 +124,7 @@ class Scanner(object):
     def peekNext(self)->str:
         if self.current+1>=len(self.source):
             return '\0'
-        return source[current+1]
+        return self.source[self.current+1]
 
     def string(self):
         while self.peek()!='"' and not self.isAtEnd():
@@ -161,8 +161,8 @@ class Scanner(object):
     def identifier(self):
         while self.isAlphaNumeric(self.peek()):
             self.advance()
-        text=source[start:current]
-        type=keyword["text"]
+        text=self.source[self.start:self.current]
+        type=keywords["text"]
         if type is None:
             type=TokenType.IDENTIFER
         self.addToken(type)
@@ -171,13 +171,11 @@ class Scanner(object):
         while not self.isAtEnd():
             self.start = self.current
             self.scanToken()
-        self.tokens.add(Token(EOF,"",None,self.line))
+        self.tokens.append(Token(TokenType.EOF,"",None,self.line))
         return self.tokens
 
-    def addToken(self,type:TokenType):
-        self.addToken(type,None)
-
-    def addToken(self,type:TokenType,literal):
-        text=source[start:current]
-        self.tokens.append(Token(type,text,literal,line))
+    
+    def addToken(self,type:TokenType,literal=None):
+        text=self.source[self.start:self.current]
+        self.tokens.append(Token(type,text,literal,self.line))
 

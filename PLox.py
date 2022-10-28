@@ -1,3 +1,5 @@
+from PLoxScanner import Scanner
+
 
 class PLox(object):
     def __init__(self):
@@ -9,7 +11,7 @@ class PLox(object):
         with open(filepath, 'r') as file:
             self.data = file.read()
         self.run(self.data)
-        if hadError:
+        if PLox.hadError:
             exit(65)
     
     def runPrompt(self):
@@ -19,7 +21,7 @@ class PLox(object):
             if(len(line)==0):
                 break
             self.run(line)
-            hadError=false
+            PLox.hadError=False
     
     def run(self,source:str):
         scanner=Scanner(source)
@@ -29,7 +31,7 @@ class PLox(object):
 
     @staticmethod
     def error(line:int,message:str):
-        report(line,"",message)
+        PLox.report(line,"",message)
 
     @staticmethod
     def report(line:int,where:str,message:str):
