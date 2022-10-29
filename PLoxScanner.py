@@ -133,7 +133,7 @@ class Scanner(object):
             self.advance()
         #case:reach the end of file
         if self.isAtEnd():
-             PLox.error(self.line,"Unterminated string.")
+             PLox.PLox.error(self.line,"Unterminated string.")
              return
         self.advance()
         value=self.source[self.start+1:self.current-1] #trim the ""

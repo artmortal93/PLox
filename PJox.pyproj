@@ -31,6 +31,9 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="PLoxMain.py" />
+    <Compile Include="PLoxParser.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="PLoxScanner.py">
       <SubType>Code</SubType>
     </Compile>

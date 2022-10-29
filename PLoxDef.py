@@ -57,7 +57,9 @@ class Token(object):
     def __str__(self)->str:
         return str(self.type)+" "+self.lexeme+" "+str(self.literal)
 
-
+class ParseError(Exception):
+    """Base class for other exceptions"""
+    pass
 
 class Expr(ABC):
     @abstractmethod
@@ -119,7 +121,7 @@ class ASTPrinter(Visitor):
         return expr.accept(self)
 
     def visitBinaryExpr(self, expr:Binary):
-        return self.parenthesize(self.expr.operator.lexeme,expr.left,expr.right)
+        return self.parenthesize(expr.operator.lexeme,expr.left,expr.right)
         
 
     def visitGroupingExpr(self, expr:Grouping):
@@ -134,7 +136,7 @@ class ASTPrinter(Visitor):
         return self.parenthesize(expr.operator.lexeme,expr.right)
     
     def parenthesize(self,name:str,*exprs):
-        output='('
+        output='('+name
         for expr in exprs:
             output+=' '
             output+=expr.accept(self) #recurive here

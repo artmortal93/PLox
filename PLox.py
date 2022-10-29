@@ -1,11 +1,13 @@
 from PLoxScanner import Scanner
-
+from PLoxDef import *
+from PLoxParser import Parser
 
 class PLox(object):
+    hadError=False
     def __init__(self):
         super().__init__()
         self.data=None
-        hadError=False
+        
         
     def runFile(self,filepath:str):
         with open(filepath, 'r') as file:
@@ -28,12 +30,25 @@ class PLox(object):
     def run(self,source:str):
         scanner=Scanner(source)
         tokens=scanner.scanTokens()
+        parser=Parser(tokens)
+        expression=parser.parse()
+        if PLox.hadError:
+            return;
+        printer=ASTPrinter()
+        print(printer.print(expression))
         for token in tokens:
             print(token)
 
     @staticmethod
     def error(line:int,message:str):
         PLox.report(line,"",message)
+
+    @staticmethod
+    def tokenError(token:Token,message:str):
+        if token.type==TokenType.EOF:
+            PLox.report(token.line,"at end",message)
+        else:
+            PLox.report(token.line,"at '"+token.lexeme+"'",message)
 
     @staticmethod
     def report(line:int,where:str,message:str):
