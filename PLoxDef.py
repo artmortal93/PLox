@@ -61,6 +61,13 @@ class ParseError(Exception):
     """Base class for other exceptions"""
     pass
 
+class RunTimeError(Exception):
+    def __init__(self,token,message):
+        super().__init__()
+        self.token=token
+        self.message=message
+
+
 class Expr(ABC):
     @abstractmethod
     def accept(self,visitor):

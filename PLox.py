@@ -1,12 +1,15 @@
 from PLoxScanner import Scanner
 from PLoxDef import *
 from PLoxParser import Parser
+from PLoxInterpreter import PLoxInterpreter
 
 class PLox(object):
     hadError=False
+    hadRuntimeError=False
     def __init__(self):
         super().__init__()
         self.data=None
+        self.interpreter=PLoxInterpreter()
         
         
     def runFile(self,filepath:str):
@@ -15,6 +18,8 @@ class PLox(object):
         self.run(self.data)
         if PLox.hadError:
             exit(65)
+        if PLox.hadError:
+            exit(70)
     
     def runPrompt(self):
         while True:
@@ -34,11 +39,13 @@ class PLox(object):
         expression=parser.parse()
         if PLox.hadError:
             return;
-        printer=ASTPrinter()
-        print(printer.print(expression))
+        self.interpreter.interpret(expression)
         for token in tokens:
             print(token)
-
+        #printer=ASTPrinter()
+        #print(printer.print(expression))
+        
+   
     @staticmethod
     def error(line:int,message:str):
         PLox.report(line,"",message)
@@ -49,6 +56,11 @@ class PLox(object):
             PLox.report(token.line,"at end",message)
         else:
             PLox.report(token.line,"at '"+token.lexeme+"'",message)
+
+    @staticmethod
+    def runtimeError(error:RunTimeError):
+        PLox.hadRuntimeError=True
+        print(error.message+" [line"+str(error.token.line)+"]")
 
     @staticmethod
     def report(line:int,where:str,message:str):
