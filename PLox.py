@@ -5,7 +5,6 @@ from PLoxInterpreter import PLoxInterpreter
 
 class PLox(object):
     hadError=False
-    hadRuntimeError=False
     def __init__(self):
         super().__init__()
         self.data=None
@@ -18,8 +17,6 @@ class PLox(object):
         self.run(self.data)
         if PLox.hadError:
             exit(65)
-        if PLox.hadError:
-            exit(70)
     
     def runPrompt(self):
         while True:
@@ -31,17 +28,17 @@ class PLox(object):
                 break
             self.run(line)
             PLox.hadError=False
-    
+             
+
     def run(self,source:str):
         scanner=Scanner(source)
         tokens=scanner.scanTokens()
         parser=Parser(tokens)
-        expression=parser.parse()
+        statments=parser.parse()
         if PLox.hadError:
             return;
-        self.interpreter.interpret(expression)
-        for token in tokens:
-            print(token)
+        self.interpreter.interpret(statments)
+       
         #printer=ASTPrinter()
         #print(printer.print(expression))
         
@@ -59,10 +56,10 @@ class PLox(object):
 
     @staticmethod
     def runtimeError(error:RunTimeError):
-        PLox.hadRuntimeError=True
+        PLox.hadError=True
         print(error.message+" [line"+str(error.token.line)+"]")
 
     @staticmethod
     def report(line:int,where:str,message:str):
         print("line {} error, {}:{}".format(line,where,message))
-        hadError=True
+        PLox.hadError=True

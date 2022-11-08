@@ -12,6 +12,12 @@
     <OutputPath>.</OutputPath>
     <Name>PLox</Name>
     <RootNamespace>PJox</RootNamespace>
+    <LaunchProvider>Standard Python launcher</LaunchProvider>
+    <InterpreterArguments>
+    </InterpreterArguments>
+    <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
+    <IsWindowsApplication>False</IsWindowsApplication>
+    <InterpreterId>Global|PythonCore|3.6</InterpreterId>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -28,7 +34,13 @@
     <Compile Include="PLox.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="PLoxCallable.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="PLoxDef.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="PLoxEnvironment.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="PLoxInterpreter.py">
@@ -48,6 +60,9 @@
   <ItemGroup>
     <Content Include="code.plox" />
     <Content Include="README.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <InterpreterReference Include="Global|PythonCore|3.6" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

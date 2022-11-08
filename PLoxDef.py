@@ -67,6 +67,11 @@ class RunTimeError(Exception):
         self.token=token
         self.message=message
 
+class ReturnException(Exception):
+    def __init__(self,value):
+        super().__init__(value)
+        self.value=value
+
 
 class Expr(ABC):
     @abstractmethod
@@ -105,6 +110,42 @@ class Unary(Expr):
     def accept(self,visitor):
         return visitor.visitUnaryExpr(self)
 
+#Variable is not easy to recognized as literal
+class Variable(Expr):
+    def __init__(self,name:Token):
+        self.name=name
+
+    def accept(self,visitor):
+        return visitor.visitVariableExpr(self)
+
+class Assign(Expr):
+    def __init__(self,name:Token,value:Expr):
+        self.name=name
+        self.value=value
+
+    def accept(self,visitor):
+        return visitor.visitAssignExpr(self)
+
+class Logical(Expr):
+    def __init__(self,left:Expr,operator:Token,right:Expr):
+        self.left=left
+        self.operator=operator
+        self.right=right
+
+    def accept(self,visitor):
+        return visitor.visitLogicalExpr(self)
+
+class Call(Expr):
+    def __init__(self,callee:Expr,paren:Token,arguments:list):
+        self.callee=callee
+        self.paren=paren #for record runtime error on function only
+        self.arguments=arguments
+
+
+    def accept(self,visitor):
+        return visitor.visitCallExpr(self)
+
+
 class Visitor(ABC):
     @abstractmethod
     def visitBinaryExpr(self,Expr):
@@ -122,33 +163,119 @@ class Visitor(ABC):
     def visitUnaryExpr(self,Expr):
         pass
 
-class ASTPrinter(Visitor):
-    #=interprete method
-    def print(self,expr:Expr):
-        return expr.accept(self)
+    @abstractmethod
+    def visitVariableExpr(self,Expr):
+        pass
 
-    def visitBinaryExpr(self, expr:Binary):
-        return self.parenthesize(expr.operator.lexeme,expr.left,expr.right)
-        
+    @abstractmethod
+    def visitLogicalExpr(self,Expr):
+        pass
 
-    def visitGroupingExpr(self, expr:Grouping):
-        return self.parenthesize('group',expr.expression)
+    @abstractmethod
+    def visitCallExpr(self,Expr):
+        pass
 
-    def visitLiteralExpr(self, expr:Literal):
-        if (expr.value==None):
-            return "nil"
-        return str(expr.value)
+class StmtVisitor(ABC):
+    @abstractmethod
+    def visitExpressionStmt(self,expression):
+        pass
 
-    def visitUnaryExpr(self, expr:Unary):
-        return self.parenthesize(expr.operator.lexeme,expr.right)
+    @abstractmethod
+    def visitPrintStmt(self,expression):
+        pass
+
+    @abstractmethod
+    def visitVarStmt(self,expression):
+        pass
+
+    @abstractmethod
+    def visitBlockStmt(self,expression):
+        pass
+
+    @abstractmethod
+    def visitIfStmt(self,expression):
+        pass
     
-    def parenthesize(self,name:str,*exprs):
-        output='('+name
-        for expr in exprs:
-            output+=' '
-            output+=expr.accept(self) #recurive here
-        output+=')'
-        return output
+    @abstractmethod
+    def visitWhileStmt(self,expression):
+        pass
+
+    @abstractmethod
+    def visitFunctionStmt(self,expression):
+        pass
+
+    @abstractmethod
+    def visitReturnStmt(self,expression):
+        pass
+
+class Stmt(ABC):
+    @abstractmethod
+    def accept(self,visitor):
+        pass
+
+class Expression(Stmt):#it means expression statment,nnot Expr
+    def __init__(self,expression:Expr):
+        self.expression=expression
+
+    def accept(self,visitor:StmtVisitor):
+        return visitor.visitExpressionStmt(self)
+
+class Print(Stmt):
+    def __init__(self,expression:Expr):
+        self.expression=expression
+
+    def accept(self,visitor:StmtVisitor):
+        return visitor.visitPrintStmt(self)
+
+class Var(Stmt):
+    def __init__(self,name:Token,initializer:Expr):
+        self.initializer=initializer
+        self.name=name
+
+    def accept(self, visitor):
+        return visitor.visitVarStmt(self)
+
+class Block(Stmt):
+    def __init__(self,statments:list):
+        self.statments=statments
+     
+    def accept(self, visitor):
+        return visitor.visitBlockStmt(self)
+
+class If(Stmt):
+    def __init__(self,condition:Expr,thenBranch:Stmt,elseBranch:Stmt):
+        self.condition=condition;
+        self.thenBranch=thenBranch
+        self.elseBranch=elseBranch
+
+    def accept(self,visitor):
+        return visitor.visitIfStmt(self)
+
+class While(Stmt):
+    def __init__(self,condition:Expr,body:Stmt):
+        self.condition=condition;
+        self.body=body
+
+    def accept(self,visitor):
+        return visitor.visitWhileStmt(self)
+
+class Function(Stmt):
+    def __init__(self,name:Token,params:list,body:list):
+        self.name=name
+        self.params=params
+        self.body=body
+
+    def accept(self,visitor):
+        return visitor.visitFunctionStmt(self)
+
+class Return(Stmt):
+    def __init__(self,keyword:Token,value:Expr):
+        self.keyword=keyword
+        self.value=value
+
+    def accept(self,visitor):
+        return visitor.visitReturnStmt(self)
+
 
 
 
