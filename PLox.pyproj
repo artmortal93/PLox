@@ -37,6 +37,9 @@
     <Compile Include="PLoxCallable.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="PLoxClass.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="PLoxDef.py">
       <SubType>Code</SubType>
     </Compile>
@@ -48,6 +51,9 @@
     </Compile>
     <Compile Include="PLoxMain.py" />
     <Compile Include="PLoxParser.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="PLoxResolver.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="PLoxScanner.py">

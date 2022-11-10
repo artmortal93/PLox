@@ -1,6 +1,7 @@
 from PLoxDef import *
 import PLox
 
+
 #generate Tree of expression(AST)
 class Parser:
     def __init__(self, tokens, *args, **kwargs):
@@ -57,6 +58,8 @@ class Parser:
             if type(expr) is Variable:
                 name=expr.name #get a token
                 return Assign(name,value)#that also mean assign should return a val in visitor
+            elif isinstance(expr,Get):
+                return Set(expr.obj,expr.name,value)
             else:
                 self.error(equals,"Invalid assignment target.")
         return expr
@@ -121,12 +124,17 @@ class Parser:
         else:
             return self.call()
 
+    #the while chain handle the mehod call very well
+    #what we left is how we evaluate class.method member
     def call(self)->Expr:
         expr=self.primary()
         while True:
             #can chain multiple chain call object for recursion
             if self.match(TokenType.LEFT_PAREN):
                 expr=self.finishCall(expr) #incase multiple chain calls
+            elif self.match(TokenType.DOT):
+                name=self.consume(TokenType.IDENTIFER,"Expect property name after .")
+                expr=Get(expr,name)
             else:
                 break
         return expr
@@ -155,6 +163,13 @@ class Parser:
             return Literal(None)
         elif self.match(TokenType.NUMBER,TokenType.STRING):
             return Literal(self.previous().literal)
+        elif self.match(TokenType.SUPER):
+            keyword=self.previous()
+            self.consume(TokenType.DOT,"Expect dot after super")
+            method=self.consume(TokenType.IDENTIFER,"Expect superclass method name")
+            return Super(keyword,method)
+        elif self.match(TokenType.THIS):
+            return This(self.previous())
         elif self.match(TokenType.IDENTIFER):
             return Variable(self.previous())
         elif self.match(TokenType.LEFT_PAREN):
@@ -204,6 +219,8 @@ class Parser:
         try:
             if self.match(TokenType.FUN):
                 return self.function("function")
+            elif self.match(TokenType.CLASS):
+                return self.classDeclaration()
             elif self.match(TokenType.VAR):
                 return self.varDeclaration()
             else:
@@ -307,6 +324,23 @@ class Parser:
             value=self.expression()
         self.consume(TokenType.SEMICOLON,"Expect ';' after rtn value")
         return Return(keyword,value)
+
+    def classDeclaration(self)->Stmt:
+        name=self.consume(TokenType.IDENTIFER,"Expect Class Name")
+        superclass=None
+        if self.match(TokenType.LESS):
+            self.consume(TokenType.IDENTIFER,"Expect Super name")
+            superclass=Variable(self.previous())
+        self.consume(TokenType.LEFT_BRACE,"Expect { before class body")
+        methods=[]
+        while not self.check(TokenType.RIGHT_BRACE) and not self.isAtEnd():
+            methods.append(self.function("method"))
+        self.consume(TokenType.RIGHT_BRACE,"Expect } after class body")
+        return Class(name,superclass,methods)
+
+
+
+
 
 
 

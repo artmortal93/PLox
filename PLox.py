@@ -1,14 +1,15 @@
 from PLoxScanner import Scanner
 from PLoxDef import *
 from PLoxParser import Parser
-from PLoxInterpreter import PLoxInterpreter
+from PLoxResolver import Resolver
+from PLoxInterpreter import Interpreter
 
 class PLox(object):
     hadError=False
     def __init__(self):
         super().__init__()
         self.data=None
-        self.interpreter=PLoxInterpreter()
+        self.interpreter=Interpreter()
         
         
     def runFile(self,filepath:str):
@@ -35,8 +36,10 @@ class PLox(object):
         tokens=scanner.scanTokens()
         parser=Parser(tokens)
         statments=parser.parse()
+        resolver=Resolver(self.interpreter)
         if PLox.hadError:
             return;
+        resolver.resolve(statments)
         self.interpreter.interpret(statments)
        
         #printer=ASTPrinter()

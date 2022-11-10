@@ -15,7 +15,19 @@ class environment:
         if self.enclosing is not None:
             return self.enclosing.get(name)
         raise RunTimeError(name,"Undefined variable '"+name.lexeme+"'.")
-    
+
+    def getAt(self,distance,name):
+        return self.ancestor(distance).values.get(name)
+
+    def ancestor(self,distance):
+        env=self
+        for i in range(distance):
+            env=env.enclosing
+        return env
+            
+    def assignAt(self,distance:int,name:Token,value):
+        self.ancestor(distance).values[name.lexeme]=value
+
     def assign(self,name,value):
         if self.values.get(name.lexeme,"Not Registered") != "Not Registered":
             self.values[name.lexeme]=value

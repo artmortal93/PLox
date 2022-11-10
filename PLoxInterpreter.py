@@ -1,16 +1,23 @@
 from PLoxDef import *
 from PLoxCallable import *
+from PLoxClass import *
 import PLox
 import PLoxEnvironment
 
-class PLoxInterpreter(Visitor,StmtVisitor):
+class Interpreter(Visitor,StmtVisitor):
     """description of class"""
     globalEnv=PLoxEnvironment.environment(None)
     def __init__(self):
         super().__init__()
         self.environment=self.globalEnv
+        self.locals=dict()
         self.globalEnv.define("clock",ClockCallable())
         
+
+    #Seperate Expr and Stmt
+
+
+
 
     def visitLiteralExpr(self, expr:Literal):
         return expr.value
@@ -65,12 +72,19 @@ class PLoxInterpreter(Visitor,StmtVisitor):
             return not self.isTruthy(rightVal)
         return None
 
+    #change to resolver version
     def visitVariableExpr(self, expr:Variable):
-        return self.environment.get(expr.name)
+        #return self.environment.get(expr.name)
+        return self.lookUpVariable(expr.name,expr) 
 
+    #change to resolver version
     def visitAssignExpr(self,expr:Assign):
         value=self.evaluate(expr.value)
-        self.environment.assign(expr.name,value)
+        distance=self.locals.get(expr)
+        if distance is not None:
+            self.environment.assignAt(distance,expr.name,value)
+        else:
+            self.globalEnv.assign(expr.name,value)
         return value
 
     def visitLogicalExpr(self,expr:Logical):
@@ -84,7 +98,7 @@ class PLoxInterpreter(Visitor,StmtVisitor):
         return self.evaluate(expr.right)
 
     def visitCallExpr(self, expr:Call):
-        callee=self.evaluate(expr.callee) #just a literal name for now
+        callee=self.evaluate(expr.callee) #return PloxCallable object stored
         arguments=[]
         for argument in expr.arguments:
             arguments.append(self.evaluate(argument))
@@ -94,6 +108,35 @@ class PLoxInterpreter(Visitor,StmtVisitor):
         if len(arguments) != function.arity():
             raise RuntimeError(expr.paren,"Expected {} arguments but got {}.".format(function.arity(),len(arguments)))
         return function.call(self,arguments)
+
+    def visitGetExpr(self, expr:Get):
+        object=self.evaluate(expr.obj)
+        if isinstance(object,PLoxInstance):
+            return object.get(expr.name)
+        raise RunTimeError(expr.name,"Only instances have properties")
+
+    def visitSetExpr(self,expr:Set):
+        object=self.evaluate(expr.obj)
+        if not isinstance(object,PLoxInstance):
+            raise RunTimeError(expr.name,"Only instances have properties")
+        value=self.evaluate(expr.value)
+        object.set(expr.name,value)
+        return value
+
+    def visitThisExpr(self,expr:This):
+        return self.lookUpVariable(expr.keyword,expr)
+
+    def visitSuperExpr(self,expr:Super):
+        distance=self.locals.get(expr)
+        superclass=self.environment.getAt(distance,"super")
+        obj=self.environment.getAt(distance-1,"this")
+        method=superclass.findMethod(expr.method.lexeme)
+        if method is None:
+            raise RunTimeError(expr.method,"Undefined propety {} in super".format(expr.method.lexeme))
+        return method.bind(obj)
+            
+    #Seperate Expr and Stmt
+
 
     def visitExpressionStmt(self, stmt:Expression):
         self.evaluate(stmt.expression)
@@ -130,7 +173,7 @@ class PLoxInterpreter(Visitor,StmtVisitor):
         return None
 
     def visitFunctionStmt(self, stmt:Function):
-        function=LoxFunction(stmt)
+        function=LoxFunction(stmt,self.environment,False) #record outer environment
         self.environment.define(stmt.name.lexeme,function)
         return None
 
@@ -140,7 +183,35 @@ class PLoxInterpreter(Visitor,StmtVisitor):
             value=self.evaluate(stmt.value)
         raise ReturnException(value)
     
+    def visitClassStmt(self,stmt:Class):
+        superclass=None
+        if stmt.superclass is not None:
+            superclass=self.evaluate(stmt.superclass)
+            if not isinstance(superclass,PLoxClass):
+                raise RunTimeError(stmt.superclass.name,"super class must be class")
+        self.environment.define(stmt.name.lexeme,None)
+        #create environment for super
+        if stmt.superclass is not None:
+            self.environment=PLoxEnvironment.environment(self.environment)
+            self.environment.define("super",superclass)
+        methods={}
+        for m in stmt.methods:
+            isInit=m.name.lexeme == "init"
+            func=LoxFunction(m,self.environment,isInit)
+            methods[m.name.lexeme]=func
+        #class contain methods dict
+        klass=PLoxClass(stmt.name.lexeme,superclass,methods)
+        if stmt.superclass is not None:
+            self.environment=self.environment.enclosing
+        self.environment.assign(stmt.name,klass)
+        return None
+
+
+
+    #Seperate Expr and Stmt
     
+
+
     def evaluate(self, expr:Expr):
         return expr.accept(self)
 
@@ -185,6 +256,14 @@ class PLoxInterpreter(Visitor,StmtVisitor):
             return text
         return str(obj)
 
+    def lookUpVariable(self,name:Token,expr:Expr):
+        distance=self.locals.get(expr)
+        if distance is not None:
+            return self.environment.getAt(distance,name.lexeme)
+        else:
+            return self.globalEnv.get(name)
+
+
     #public interface
     def interpret(self,statments:list):
         try:
@@ -195,5 +274,10 @@ class PLoxInterpreter(Visitor,StmtVisitor):
 
     def execute(self, stmt:Stmt):
         stmt.accept(self) 
+
+    def resolve(self, expr:Expr, depth:int):
+        self.locals[expr]=depth
+
+        
 
 
