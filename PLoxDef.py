@@ -347,12 +347,12 @@ class Return(Stmt):
         return visitor.visitReturnStmt(self)
 
 class Class(Stmt):
-     def __init__(self,name:Token,superclass:Variable,methods:list):
+    def __init__(self,name:Token,superclass:Variable,methods:list):
         self.name=name
         self.methods=methods
         self.superclass=superclass
 
-     def accept(self,visitor):
+    def accept(self,visitor):
         return visitor.visitClassStmt(self)
 
 

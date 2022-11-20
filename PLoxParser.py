@@ -4,7 +4,7 @@ import PLox
 
 #generate Tree of expression(AST)
 class Parser:
-    def __init__(self, tokens, *args, **kwargs):
+    def __init__(self, tokens):
         self.tokens=tokens
         self.current=0 #the one are waiting to check token but not check yet
 
