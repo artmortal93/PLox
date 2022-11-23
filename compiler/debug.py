@@ -1,41 +1,61 @@
-from chunk import *
+import chunk
+import value
 
-
-def disassembleChunk(chunk:Chunk,name:str):
+def disassembleChunk(c:chunk.Chunk,name:str):
     print("== {} ==".format(name))
     offset=0
-    while offset<chunk.count:
-        offset=disassembleInstruction(chunk,offset)
+    while offset<c.count:
+        offset=disassembleInstruction(c,offset)
 
-def disassembleInstruction(chunk:Chunk,offset:int):
+def disassembleInstruction(c:chunk.Chunk,offset:int):
     print("{:04d}".format(offset),end=' ')
-    if offset>0 and chunk.lines[offset]==chunk.lines[offset-1]:
+    if offset>0 and c.lines[offset]==c.lines[offset-1]:
         print("   | ",end='')
     else:
-        print("{:04d} ".format(chunk.lines[offset]),end='')
-    instruction=chunk.code[offset]
-    if instruction is OpCode.OP_RETURN:
+        print("{:04d} ".format(c.lines[offset]),end='')
+    instruction=c.code[offset]
+    if instruction is chunk.OpCode.OP_RETURN:
         return simpleInstruction("OP_RETURN",offset)
-    elif instruction is OpCode.OP_CONSTANT:
-        return constantInstruction("OP_CONSTANT",chunk,offset)
-    elif instruction is OpCode.OP_NEGATE:
+    elif instruction is chunk.OpCode.OP_CONSTANT:
+        return constantInstruction("OP_CONSTANT",c,offset)
+    elif instruction is chunk.OpCode.OP_NEGATE:
         return simpleInstruction("OP_NEGATE",offset)
-    elif instruction is OpCode.OP_ADD:
+    elif instruction is chunk.OpCode.OP_ADD:
         return simpleInstruction("OP_ADD",offset)
-    elif instruction is OpCode.OP_MULTIPLY:
+    elif instruction is chunk.OpCode.OP_MULTIPLY:
         return simpleInstruction("OP_MULTIPLY",offset)
-    elif instruction is OpCode.OP_DIVIDE:
+    elif instruction is chunk.OpCode.OP_DIVIDE:
         return simpleInstruction("OP_DIVIDE",offset)
-    elif instruction is OpCode.OP_SUBTRACT:
+    elif instruction is chunk.OpCode.OP_SUBTRACT:
         return simpleInstruction("OP_SUBTRACE",offset)
-    elif instruction is OpCode.OP_NIL:
+    elif instruction is chunk.OpCode.OP_NIL:
         return simpleInstruction("OP_NIL",offset)
-    elif instruction is OpCode.OP_TRUE:
+    elif instruction is chunk.OpCode.OP_TRUE:
         return simpleInstruction("OP_TRUE",offset)
-    elif instruction is OpCode.OP_FALSE:
+    elif instruction is chunk.OpCode.OP_FALSE:
         return simpleInstruction("OP_FALSE",offset)
-    elif instruction is OpCode.OP_NOT:
+    elif instruction is chunk.OpCode.OP_NOT:
         return simpleInstruction("OP_NOT",offset)
+    elif instruction is chunk.OpCode.OP_EQUAL:
+        return simpleInstruction("OP_EQUAL",offset)
+    elif instruction is chunk.OpCode.OP_GREATER:
+        return simpleInstruction("OP_GREATER",offset)
+    elif instruction is chunk.OpCode.OP_LESS:
+        return simpleInstruction("OP_LESS",offset)
+    elif instruction is chunk.OpCode.OP_PRINT:
+        return simpleInstruction("OP_PRINT",offset)
+    elif instruction is chunk.OpCode.OP_POP:
+        return simpleInstruction("OP_POP",offset)
+    elif instruction is chunk.OpCode.OP_DEFINE_GLOBAL:
+        return constantInstruction("OP_DEFINE_GLOBAL",c,offset)
+    elif instruction is chunk.OpCode.OP_GET_GLOBAL:
+        return constantInstruction("OP_GET_GLOBAL",c,offset)
+    elif instruction is chunk.OpCode.OP_SET_GLOBAL:
+        return constantInstruction("OP_SET_GLOBAL",c,offset)
+    elif instruction is chunk.OpCode.OP_GET_LOCAL:
+        return byteInstruction("OP_GET_LOCAL",c,offset)
+    elif instruction is chunk.OpCode.OP_SET_LOCAL:
+        return byteInstruction("OP_SET_LOCAL",c,offset)
     else:
         print("Unknown Op code {}".format(instruction))
         return offset+1
@@ -44,10 +64,15 @@ def simpleInstruction(name,offset):
     print("{}".format(name))
     return offset+1
 
-def constantInstruction(name:str,chunk:Chunk,offset:int):
-    constant=chunk.code[offset+1]
+def constantInstruction(name:str,c,offset:int):
+    constant=c.code[offset+1]
     print("{} {:04d}".format(name,constant),end=' ')
-    printValue(chunk.constants.values[constant])
+    value.printValue(c.constants.values[constant])
     print("",end='\n')
+    return offset+2
+
+def byteInstruction(name,c,offset):
+    slot=c.code[offset+1]
+    print("{}:{}".format(name,slot))
     return offset+2
     

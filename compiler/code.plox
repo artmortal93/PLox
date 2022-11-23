@@ -1,1 +1,8 @@
--5.302+3.147*2.12/1.33
+print 1+2;
+print 3+4;
+print "hi";
+var beverage = "cafe au lait";
+var breakfast =  "beignets";
+breakfast = "hi";
+breakfast = "beignets with " + beverage;
+print breakfast;

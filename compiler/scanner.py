@@ -132,7 +132,7 @@ class Scanner(object):
         if c=='(':
             return self.makeToken(TokenType.LEFT_PAREN)
         elif c==')':
-            return self.maleToken(TokenType.RIGHT_PAREN)
+            return self.makeToken(TokenType.RIGHT_PAREN)
         elif c=='{':
             return self.makeToken(TokenType.LEFT_BRACE)
         elif c=='}':
@@ -189,9 +189,10 @@ class Scanner(object):
         while self.peek()!='"' and not self.isAtEnd():
             if self.peek()=='\n':
                 self.line+=1
-                self.advance()
+            self.advance()
         if self.isAtEnd():
             return self.errorToken("Unterminated String")
+        self.advance()
         return self.makeToken(TokenType.STRING)
     
     def number(self):
@@ -232,7 +233,7 @@ class Scanner(object):
         elif c=='o':
             return self.checkKeyword(1,1,'r',TokenType.OR)
         elif c=='p':
-            return self.checkKeyword(1,4,'print',TokenType.PRINT)
+            return self.checkKeyword(1,4,'rint',TokenType.PRINT)
         elif c=='r':
             return self.checkKeyword(1,5,'eturn',TokenType.RETURN)
         elif c=='s':
