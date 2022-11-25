@@ -6,3 +6,10 @@ var breakfast =  "beignets";
 breakfast = "hi";
 breakfast = "beignets with " + beverage;
 print breakfast;
+if (1+3==3)
+{
+    print breakfast;
+}
+else{
+    print beverage;
+}

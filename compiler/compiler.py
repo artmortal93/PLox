@@ -25,6 +25,10 @@ class Precedence(IntEnum):
     PREC_CALL=9, 
     PREC_PRIMARY=10
     
+class FunctionType(Enum):
+    TYPE_FUNCTION=0
+    TYPE_SCRIPT=1
+    
 class Local:
     def __init__(self) -> None:
         self.name=Token()
@@ -32,6 +36,8 @@ class Local:
         
 class Compiler:
     def __init__(self) -> None:
+        self.function=None
+        self.type=None
         self.locals=[None]*256
         self.localCount=0
         self.scopeDepth=0
@@ -157,12 +163,16 @@ def resolveLocal(compiler:Compiler,name:Token):
 def statement():
     if match(TokenType.PRINT):
         printStatement()
-    elif match(TokenType.TOKEN_IF):
+    elif match(TokenType.IF):
         ifStatement()
     elif match(TokenType.LEFT_BRACE):
         beginScope()
         block()
         endScope()
+    elif match(TokenType.LEFT_BRACE):
+        whileStatement()
+    elif match(TokenType.FOR):
+        forStatement()
     else:
         expressionStatement()
         
@@ -176,6 +186,55 @@ def expressionStatement():
     consume(TokenType.SEMICOLON,"expect ';' after value.")
     emitByte(OpCode.OP_POP) #you must need to pop the value after a expression is done
     
+def forStatement():
+    beginScope()
+    consume(TokenType.LEFT_PAREN,"Expect ( after for")
+    if match(TokenType.SEMICOLON):
+        pass
+    elif match(TokenType.VAR):
+        varDeclaration()
+    else:
+        expressionStatement()
+    consume(TokenType.SEMICOLON,"Expect ';'")
+    #condition expression
+    loopStart=currentChunk().count #current var declare point
+    exitJump=-1
+    if not match(TokenType.SEMICOLON):
+        expression() #condition
+        consume(TokenType.SEMICOLON,"Expect ';' after loop condition")
+        exitJump=emitJump(OpCode.OP_JUMP_IF_FALSE)
+        emitByte(OpCode.OP_POP)
+    #increment
+    if not match(TokenType.RIGHT_PAREN):
+        bodyJump=emitJump(OpCode.OP_JUMP) #force jump
+        incrementStart=currentChunk().count #jump back after execute the body
+        expression()
+        emitByte(OpCode.OP_POP)
+        consume(TokenType.RIGHT_PAREN,"Expect ')' after for clauses")
+        emitLoop(loopStart)
+        loopStart=incrementStart
+        patchJump(bodyJump)
+    #the block
+    statement()
+    emitLoop(loopStart) #get back to the loopstart
+    if exitJump!=-1:
+        patchJump(exitJump)
+        emitByte(OpCode.OP_POP)
+    endScope()
+    
+def whileStatement():
+    loopStart=currentChunk().count
+    consume(TokenType.LEFT_PAREN,"Expect '(' after while")
+    expression()
+    consume(TokenType.RIGHT_PAREN,"Expect ')' after condition")
+    exitJump=emitJump(OpCode.OP_JUMP_IF_FALSE)
+    emitByte(OpCode.OP_POP)
+    statement()
+    emitLoop(loopStart)
+    patchJump(exitJump)
+    emitByte(OpCode.OP_POP)
+    
+
 def block():
     while not check(TokenType.RIGHT_BRACE) and not check(TokenType.EOF):
         declaration()
@@ -189,7 +248,7 @@ def endScope():
     global current
     current.scopeDepth-=1
     while current.localCount>0 and current.locals[current.localCount-1].depth>current.scopeDepth:
-        emitByte(OpCode.POP)
+        emitByte(OpCode.OP_POP)
         current.localCount-=1
         
 def ifStatement():
@@ -197,12 +256,15 @@ def ifStatement():
     expression()
     consume(TokenType.RIGHT_PAREN,"expect ')' after if")
     thenJump=emitJump(OpCode.OP_JUMP_IF_FALSE) #return the offset to jump if condition is false we not have else here
+    emitByte(OpCode.OP_POP) #notice that if false this is omiited and have not effect
     statement()
     elseJump=emitJump(OpCode.OP_JUMP)
     patchJump(thenJump)
+    emitByte(OpCode.OP_POP) #if the condition is true these are also omitted
     if match(TokenType.ELSE):
         statement()
     patchJump(elseJump)
+    
     
 
 #detail parse rule
@@ -289,11 +351,23 @@ def variable(canAssign:bool):
     global parser
     namedVariable(parser.previous,canAssign)
     
-
+def and_(canAssign:bool):
+    #in here we already parse the former part of the and expression
+    #jump if false leave it's value on the stack as the result
+    endJump=emitJump(OpCode.OP_JUMP_IF_FALSE)
+    emitByte(OpCode.OP_POP)#if the value is true we pop,keep the next precedence result as it's result
+    parsePrecedence(Precedence.PREC_AND)
+    patchJump(endJump)
     
+def or_(canAssign:bool):
+    elseJump=emitJump(OpCode.OP_JUMP_IF_FALSE)
+    endJump=emitJump(OpCode.OP_JUMP)
+    patchJump(elseJump)
+    emitByte(OpCode.OP_POP)
+    parsePrecedence(Precedence.PREC_OR)
+    patchJump(endJump)
  
 DEBUG_PRINT_CODE=True        
-compilingChunk=Chunk(None)
 parser=Parser()
 scanner=Scanner(None)
 globalSource=str()
@@ -321,7 +395,7 @@ rules={
     int(TokenType.IDENTIFER):ParseRule(variable,None,Precedence.PREC_NONE),
     int(TokenType.STRING):ParseRule(string,None,Precedence.PREC_NONE),
     int(TokenType.NUMBER):ParseRule(number,None,Precedence.PREC_NONE),
-    int(TokenType.AND):ParseRule(None,None,Precedence.PREC_NONE),
+    int(TokenType.AND):ParseRule(None,and_,Precedence.PREC_AND),
     int(TokenType.CLASS):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.ELSE):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.FALSE):ParseRule(literal,None,Precedence.PREC_NONE),
@@ -329,7 +403,7 @@ rules={
     int(TokenType.FUN):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.IF):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.NIL):ParseRule(literal,None,Precedence.PREC_NONE),
-    int(TokenType.OR):ParseRule(None,None,Precedence.PREC_NONE),
+    int(TokenType.OR):ParseRule(None,or_,Precedence.PREC_OR),
     int(TokenType.PRINT):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.RETURN):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.SUPER):ParseRule(None,None,Precedence.PREC_NONE),
@@ -373,17 +447,17 @@ def getRule(type:TokenType)->ParseRule:
     global rules
     return rules.get(int(type))
 
-
-def compile(source,chunk)->bool:
+#remove chunk
+def compile(source)->ObjFunction:
     global scanner
     global parser
-    global compilingChunk
     global globalSource
+    global current
     globalSource=source
     scanner=Scanner(source)
     compiler=Compiler()
-    initCompiler(compiler)
-    compilingChunk=chunk
+    #impilicit top level function like main, and it store it's own initial chunk
+    initCompiler(compiler,FunctionType.TYPE_SCRIPT)
     parser=Parser()
     advance() #consume one token to parser
     #expression()
@@ -391,8 +465,8 @@ def compile(source,chunk)->bool:
     #
     while match(TokenType.EOF) is False:
         declaration()
-    endCompiler()
-    return not parser.hadError
+    #function=endCompiler()
+    return None if parser.hadError else endCompiler()
      
 def advance():
     global scanner
@@ -467,15 +541,19 @@ def emitByte(byte):
     writeChunk(currentChunk(),byte,parser.previous.line)
     
 def currentChunk():
-    global compilingChunk
-    return compilingChunk
+    global current 
+    return current.function.chunk
 
 def endCompiler():
-    global parser 
+    global parser
+    global current 
     emitReturn()
+    function=current.function
     if DEBUG_PRINT_CODE is True:
         if not parser.hadError:
-            disassembleChunk(currentChunk(),"code")
+            info=function.name.chars if function.name is not None else "<script>"
+            disassembleChunk(currentChunk(),"")
+    return current.function
     
 def emitReturn():
     emitByte(OpCode.OP_RETURN)
@@ -487,6 +565,30 @@ def emitBytes(byte1,byte2):
 def emitConstant(value:Value):
     emitBytes(OpCode.OP_CONSTANT,makeConstant(value))
     
+def emitJump(instruction):
+    emitByte(instruction)
+    emitByte(0xff)
+    emitByte(0xff) #16 bits of offset code to jump
+    return currentChunk().count-2
+
+def emitLoop(loopStart:int):
+    emitByte(OpCode.OP_LOOP)
+    offset=currentChunk().count-loopStart+2
+    if offset>65536:
+        error("Too much for loop body")
+    emitByte((offset>>8) & 0xff)
+    emitByte(offset & 0xff)
+
+#this is the the idx of jump command
+def patchJump(offset):
+    jump=currentChunk().count-offset-2
+    #return to 
+    if jump>65536:
+        error("Too much to jump over")
+    currentChunk().code[offset]= ((jump>>8) & 0xff)
+    currentChunk().code[offset+1]= (jump & 0xff)
+    
+    
 def makeConstant(value:Value):
     constant_idx=addConstant(currentChunk(),value)
     if constant_idx>256:
@@ -494,10 +596,17 @@ def makeConstant(value:Value):
         return 0
     return constant_idx
 
-def initCompiler(compiler:Compiler):
-    global current 
-    compiler.localCount=0
+def initCompiler(compiler:Compiler,type:FunctionType):
+    global current
+    local=Local()
+    local.depth=0
+    local.name.start=""
+    local.name.length=0
+    compiler.locals[0]=local #first slot for internal vm use
+    compiler.localCount=1
     compiler.scopeDepth=0
+    compiler.type=type
+    compiler.function=newFunction()
     current=compiler
     
 

@@ -56,6 +56,12 @@ def disassembleInstruction(c:chunk.Chunk,offset:int):
         return byteInstruction("OP_GET_LOCAL",c,offset)
     elif instruction is chunk.OpCode.OP_SET_LOCAL:
         return byteInstruction("OP_SET_LOCAL",c,offset)
+    elif instruction is chunk.OpCode.OP_JUMP:
+        return jumpInstruction("OP_JUMP",1,c,offset)
+    elif instruction is chunk.OpCode.OP_JUMP_IF_FALSE:
+        return jumpInstruction("OP_JUMP_IF_FALSE",1,c,offset)
+    elif instruction is chunk.OpCode.OP_LOOP:
+        return jumpInstruction("OP_LOOP",-1,c,offset)
     else:
         print("Unknown Op code {}".format(instruction))
         return offset+1
@@ -75,4 +81,11 @@ def byteInstruction(name,c,offset):
     slot=c.code[offset+1]
     print("{}:{}".format(name,slot))
     return offset+2
+
+def jumpInstruction(name,sign,c,offset):
+    jump1=c.code[offset+1]<<8
+    jump2=c.code[offset+2]
+    jump=jump1 | jump2 
+    print("{} {}->{}".format(name,offset,offset+3+sign*jump))
+    return offset+3
     

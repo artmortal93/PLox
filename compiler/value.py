@@ -15,6 +15,7 @@ class Value:
 
 class ObjType(Enum):
     OBJ_STRING=0
+    OBJ_FUNCTION=1
 
 #unlike book this is a indicator class only
 class Obj:
@@ -30,8 +31,22 @@ class ObjString:
         
     def __eq__(self, other) -> bool:
         return self.hash==other.hash
+    
+class ObjFunction:
+    def __init__(self) -> None:
+        self.obj=None
+        self.arity=0
+        self.chunk=None
+        self.name=None
         
-        
+def newFunction():
+    import chunk
+    function=ObjFunction()
+    function.arity=0
+    function.name=None
+    function.obj=allocateObj(ObjType.OBJ_FUNCTION)
+    function.chunk=chunk.initChunk()
+    return function    
         
 def IS_BOOL(value:Value):
     return value.type==ValueType.VAL_BOOL 
@@ -44,6 +59,8 @@ def IS_NIL(value:Value):
 
 def IS_OBJ(value:Value):
     return value.type==ValueType.VAL_OBJ
+
+
 
 
 def AS_BOOL(value:Value):
@@ -59,6 +76,9 @@ def AS_STRING(value:Value):
 #return c string
 def AS_CSTRING(value:Value):
     return value.asval.chars
+
+def AS_FUNCTION(value:Value):
+    return value.asval
 
 '''
 directly return object identifier in value
@@ -92,6 +112,11 @@ def OBJ_TYPE(val:Value):
      
 def IS_STRING(val):
     return isObjType(val,ObjType.OBJ_STRING)
+
+def IS_FUNCTION(value:Value):
+    return isObjType(value,ObjType.OBJ_FUNCTION)
+
+
     
 def isObjType(val:Value,type:ObjType):
     return IS_OBJ(val) and OBJ_TYPE(val)==type  
@@ -206,8 +231,16 @@ def printObject(value:Value):
     t=OBJ_TYPE(value)
     if t==ObjType.OBJ_STRING:
         print(AS_CSTRING(value))
-    else:
-        pass
+    elif t==ObjType.OBJ_FUNCTION:
+        printFunction(AS_FUNCTION(value))
+        
+        
+def printFunction(function:ObjFunction):
+    if function.name is None:
+        print("<script>")
+        return
+    print("<fn {}>".format(function.name.chars))
+    
     
     
 

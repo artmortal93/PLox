@@ -28,6 +28,7 @@ class OpCode(Enum):
     OP_SET_LOCAL=20
     OP_JUMP_IF_FALSE=21
     OP_JUMP=22
+    OP_LOOP=23
         
 class Chunk:
     __slots__ = ["code", "count","capacity","constants","lines"]

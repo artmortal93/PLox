@@ -6,19 +6,29 @@ from collections import deque
 import compiler
 import table
 
+
+class CallFrame:
+    def __init__(self) -> None:
+        self.function=None #the function it contains
+        self.slots=None #the first usable vm value stack pointer it can use
+        self.ip=None #record the ip of the caller so we can jump to
+
 #chunk is from outside 
 #stack is VM own state
 class VM:
-    STACK_MAX=256
+    STACK_MAX=1024
+    FRAMES_MAX=64
     def __init__(self) -> None:
         self.chunk=None
-        self.ip=0 
+        self.ip=0 #has no use and replaced by callframe.ip
         self.DEBUG_TRACE_EXECUTION=False
         self.stack=deque([None]*self.STACK_MAX)
         self.objects=deque() #heap for large objects(DEPRECATED)
         self.strings=table.Table() #able to find all the string it created
         self.stackTop=0
         self.globals=table.Table() #global var table
+        self.frames=deque([CallFrame()]*self.FRAMES_MAX)#call frames
+        self.frameCount=0
 
     
 vm=VM()          
@@ -64,31 +74,44 @@ def pop():
 
 def interpret(source:str)->InterpretResult:
     global vm
-    c=chunk.initChunk()
-    if not compiler.compile(source,c):
-        chunk.freeChunk(c)
+    function=compiler.compile(source)
+    if function is None:
         return InterpretResult.INTERPRET_COMPILE_ERROR
-    vm.chunk=c 
-    vm.ip=0
-    result=run()
-    chunk.freeChunk(c)
-    return result
+    vm.frames[vm.frameCount].function=function
+    vm.frames[vm.frameCount].ip=0
+    vm.frames[vm.frameCount].slots=vm.stack
+    vm.frameCount+=1
+    return run()
     
     
 def read_byte():
     global vm
-    instruction=vm.chunk.code[vm.ip]
-    vm.ip+=1
+    #topmost frame
+    curFrame=vm.frames[vm.frameCount-1]
+    cur_ip=curFrame.ip
+    instruction=curFrame.function.chunk.code[cur_ip]
+    vm.frames[vm.frameCount-1].ip+=1
     return instruction
 
 def read_constant():
     global vm
-    return vm.chunk.constants.values[read_byte()]
+     #topmost frame
+    curFrame=vm.frames[vm.frameCount-1]
+    return curFrame.function.chunk.constants.values[read_byte()]
 
 def read_string():
     global vm
     val=value.AS_STRING(read_constant())
     return val
+
+def read_short():
+    global vm
+    vm.frames[vm.frameCount-1].ip+=2
+    curFrame=vm.frames[vm.frameCount-1]
+    f=curFrame.function.chunk.code[curFrame.ip-1]
+    l=curFrame.function.chunk.code[curFrame.ip-2]
+    n=(l<<8) | f 
+    return n
 
 
 def peek(distance:int):
@@ -98,8 +121,9 @@ def peek(distance:int):
 def runtimeError(message,*args):
     global vm 
     print(message.format(*args))
-    instruction=vm.ip-0-1
-    line=vm.chunk.lines[instruction]
+    frame=vm.frames[vm.frameCount-1]
+    instruction=frame.ip-0-1
+    line=frame.function.chunk.lines[instruction]
     print("[line {}] in script".format(line))
     resetStack()
     
@@ -118,13 +142,14 @@ def concatenate():
 
 def run()->InterpretResult:
     global vm
+    frame=vm.frames[vm.frameCount-1] #point to the current frame
     while True:
         if vm.DEBUG_TRACE_EXECUTION:
             print("       ",end='')
             for i in range(vm.stackTop):
                 print("[{}]".format(vm.stack[i]),end='')
             print()
-            debug.disassembleInstruction(vm.chunk,vm.ip)
+            debug.disassembleInstruction(frame.function.chunk,frame.ip)
         instruction=read_byte()
         if instruction==chunk.OpCode.OP_RETURN:
             return InterpretResult.INTERPRET_OK
@@ -224,13 +249,23 @@ def run()->InterpretResult:
             if table.tableSet(vm.globals,name,peek(0)):
                 table.tableDelete(vm.globals,name)
                 runtimeError("Undefined variable {}".format(name.chars))
-                return InterpretResult.INTERPRET_RUNTIME_ERROR
+                return InterpretResult.INTERPRET_RUNTIME_ERROR    
         elif instruction==chunk.OpCode.OP_GET_LOCAL:
             slot=read_byte()
-            push(vm.stack[slot])
+            push(frame.slots[slot])
         elif instruction==chunk.OpCode.OP_SET_LOCAL:
             slot=read_byte()
-            vm.stack[slot]=peek(0)
+            frame.slots[slot]=peek(0)
+        elif instruction==chunk.OpCode.OP_JUMP_IF_FALSE:
+            offset=read_short()
+            if isFalsey(peek(0)):
+                frame.ip+=offset
+        elif instruction==chunk.OpCode.OP_JUMP:
+            offset=read_short()
+            frame.ip+=offset
+        elif instruction==chunk.OpCode.OP_LOOP:
+            offset=read_short()
+            frame.ip-=offset
         else:
             pass
         
