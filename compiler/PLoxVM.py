@@ -5,6 +5,7 @@ import chunk
 from collections import deque
 import compiler
 import table
+from copy import deepcopy
 
 
 class CallFrame:
@@ -27,7 +28,9 @@ class VM:
         self.strings=table.Table() #able to find all the string it created
         self.stackTop=0
         self.globals=table.Table() #global var table
-        self.frames=deque([CallFrame()]*self.FRAMES_MAX)#call frames
+        self.frames=[None]*self.FRAMES_MAX#call frames
+        for i in range(self.FRAMES_MAX):
+            self.frames[i]=CallFrame()
         self.frameCount=0
 
     
@@ -46,6 +49,7 @@ def initVM():
     global vm
     table.initTable(vm.strings)
     table.initTable(vm.globals)
+    defineNative("clock",clockNative)
     resetStack()
     
 def freeVM():
@@ -136,7 +140,7 @@ def runtimeError(message,*args):
         if fun.name is None:
             info+="script"
         else:
-            info+=fun.name.chars
+            info+=fun.name.chars+"()"
         print(info)    
     resetStack()
     
@@ -165,7 +169,14 @@ def run()->InterpretResult:
             debug.disassembleInstruction(frame.function.chunk,frame.ip)
         instruction=read_byte()
         if instruction==chunk.OpCode.OP_RETURN:
-            return InterpretResult.INTERPRET_OK
+            result=pop()
+            vm.frameCount-=1
+            if vm.frameCount==0:
+                pop() #pop out main function
+                return InterpretResult.INTERPRET_OK
+            vm.stackTop=frame.slots
+            push(result) #return value,we only discard the function var
+            frame=vm.frames[vm.frameCount-1]
         elif instruction==chunk.OpCode.OP_CONSTANT:
             constant=read_constant()
             push(constant)
@@ -243,7 +254,6 @@ def run()->InterpretResult:
             push(value.BOOL_VAL(v)) 
         elif instruction==chunk.OpCode.OP_PRINT:
             value.printValue(pop())
-            print("")  
         elif instruction==chunk.OpCode.OP_POP:
             pop()      
         elif instruction==chunk.OpCode.OP_DEFINE_GLOBAL:
@@ -300,13 +310,25 @@ def call(function:value.ObjFunction,argCount:int):
     if vm.frameCount==256:
         runtimeError("Stack overflow")
         return False
-    frame=vm.frames[vm.frameCount]
-    previousFrame=vm.frames[vm.frameCount-1]
-    assert previousFrame is not None 
+    '''
+    if vm.frameCount!=0:
+        print("current top frame:{}".format(vm.frames[vm.frameCount-1].function.name.chars))
+        print("upcoming frame:{}".format(function.name.chars))
+        print("ought to empty frame:{}".format(vm.frames[vm.frameCount].function.name.chars))
+    else:
+        print("upcoming frame:{}".format(function.name.chars))
+        print("ought to empty frame:{}".format(vm.frames[vm.frameCount].function.name.chars))
+    '''    
     vm.frames[vm.frameCount].function=function
     vm.frames[vm.frameCount].ip=0
     vm.frames[vm.frameCount].slots=vm.stackTop-argCount-1 #slots point at the position of fun obj
     vm.frameCount+=1
+    '''
+    print("vm call function {} in call()".format(function.name.chars))
+    for i in reversed(range(0,vm.frameCount)):
+        print(vm.frames[i].function.name.chars,end=' ')
+    print()
+    '''
     return True
         
 def callValue(callee:value.Value,argCount:int):
@@ -314,9 +336,32 @@ def callValue(callee:value.Value,argCount:int):
         t=value.OBJ_TYPE(callee)
         if t==value.ObjType.OBJ_FUNCTION:
             return call(value.AS_FUNCTION(callee),argCount)
+        elif t==value.ObjType.OBJ_NATIVE:
+            native=value.AS_NATIVE(callee)
+            arguments=[]
+            for i in range(vm.stackTop-argCount,vm.stackTop):
+                arguments.append(deepcopy(vm.stack[i]))
+            argTuple=tuple(arguments)    
+            res=native(argCount,argTuple)
+            vm.stackTop-= argCount+1
+            push(res)
+            return True
         else:
             pass 
     runtimeError("can only call function and classes")
     return False
         
+def defineNative(name:str,fun):
+    push(value.OBJ_VAL(value.copyString(name,len(name))))
+    push(value.OBJ_VAL(value.newNative(fun)))
+    global vm
+    table.tableSet(vm.globals,value.AS_STRING(vm.stack[0]),vm.stack[1])
+    pop()
+    pop()
+    
+def clockNative(argCount,*args):
+    import time
+    return value.NUMBER_VAL(time.time())
+
+
         

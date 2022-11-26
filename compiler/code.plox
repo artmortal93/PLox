@@ -1,12 +1,10 @@
-
-print 1+2;
-print 3+4;
-print "hi";
 var beverage = "cafe au lait";
 var breakfast =  "beignets";
 breakfast = "hi";
 breakfast = "beignets with " + beverage;
 print breakfast;
+var resa=2;
+print resa;
 if (1+3==3)
 {
     print breakfast;
@@ -18,9 +16,47 @@ fun areWeHavingItYet()
 {
     print 1;
 }
-fun a() { b(); }
-fun b() { c(); }
-fun c() {
- c("too", "many");
+fun a()
+{   
+    var local=1;
+    print "a";
+    print local;
+    b();
 }
-a();
+fun b() 
+{   
+    var local=2;
+    print "b";
+    print local;
+    c();
+}
+fun c()
+{   
+    var local=3;
+    print "c";
+    print local;
+    //c("why");
+}
+fun doNothing()
+{
+    
+}
+fun fib(n) 
+{
+ if (n < 2) return n;
+ return fib(n - 2) + fib(n - 1);
+}
+var start=clock();
+var res=fib(15);
+var end=clock();
+print res;
+print end-start;
+var x = "global";
+fun outer() {
+ var x = "outer";
+ fun inner() {
+ print x;
+ }
+ inner();
+}
+outer();

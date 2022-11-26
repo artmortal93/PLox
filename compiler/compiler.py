@@ -77,7 +77,8 @@ def function(type:FunctionType):
     global current
     localCompiler=Compiler()
     initCompiler(localCompiler,type) #init and make it current compiler(chunk)
-    beginScope()
+    beginScope()# a new compiler comes with new local, but all function variable are relative so you dont want
+    #to end the scope because all variable should be local in a function
     consume(TokenType.LEFT_PAREN,"Expect ( after function name")
     if not check(TokenType.RIGHT_PAREN):
         while True:
@@ -92,6 +93,7 @@ def function(type:FunctionType):
     consume(TokenType.LEFT_BRACE,"Expect { before function body")
     block()
     function=endCompiler() #pop out the function current compiler hold
+    #endScope() #why missing
     emitBytes(OpCode.OP_CONSTANT,makeConstant(OBJ_VAL(function)))
         
 def varDeclaration():
@@ -202,8 +204,10 @@ def statement():
         beginScope()
         block()
         endScope()
-    elif match(TokenType.LEFT_BRACE):
+    elif match(TokenType.WHILE):
         whileStatement()
+    elif match(TokenType.RETURN):
+        returnStatement()
     elif match(TokenType.FOR):
         forStatement()
     else:
@@ -267,6 +271,17 @@ def whileStatement():
     patchJump(exitJump)
     emitByte(OpCode.OP_POP)
     
+    
+def returnStatement():
+    global current
+    if current.type==FunctionType.TYPE_SCRIPT:
+        error("Cant return from top level code")
+    if match(TokenType.SEMICOLON):
+        emitReturn()
+    else:
+        expression()
+        consume(TokenType.SEMICOLON,"Expect ';' after return value")
+        emitByte(OpCode.OP_RETURN)
 
 def block():
     while not check(TokenType.RIGHT_BRACE) and not check(TokenType.EOF):
@@ -402,7 +417,6 @@ def or_(canAssign:bool):
 
 #when call are called the function value it's already on the top of stack
 def call_(canAssign:bool):
-    print("call call")
     argCount=argumentList()
     emitBytes(OpCode.OP_CALL,argCount)
     
@@ -416,7 +430,6 @@ def argumentList():
                 error("Cant have more than 255 arguments")
             if not match(TokenType.COMMA):
                 break
-    print("arg count is {}".format(argCount))
     consume(TokenType.RIGHT_PAREN,"Expect ')' after arguments.")
     return argCount
                 
@@ -607,11 +620,12 @@ def endCompiler():
     if DEBUG_PRINT_CODE is True:
         if not parser.hadError:
             info=function.name.chars if function.name is not None else "<script>"
-            disassembleChunk(currentChunk(),"")
+            #disassembleChunk(currentChunk(),"")
     current=current.enclosing
     return function
     
 def emitReturn():
+    emitByte(OpCode.OP_NIL)
     emitByte(OpCode.OP_RETURN)
     
 def emitBytes(byte1,byte2):
@@ -665,12 +679,16 @@ def initCompiler(compiler:Compiler,type:FunctionType):
     compiler.scopeDepth=0
     compiler.type=type
     compiler.function=newFunction()
+    if type==FunctionType.TYPE_SCRIPT:
+        mainName="main"
+        compiler.function.name=copyString(mainName,4)
     compiler.enclosing=current
     current=compiler
     if type!=FunctionType.TYPE_SCRIPT:
         start=parser.previous.start
         length=parser.previous.length
         nameStr=globalSource[start:start+length]
+        print("init compiler for {}".format(nameStr))
         current.function.name=copyString(nameStr,length)
     
 

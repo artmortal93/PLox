@@ -16,6 +16,7 @@ class Value:
 class ObjType(Enum):
     OBJ_STRING=0
     OBJ_FUNCTION=1
+    OBJ_NATIVE=2
 
 #unlike book this is a indicator class only
 class Obj:
@@ -39,6 +40,11 @@ class ObjFunction:
         self.chunk=None
         self.name=None
         
+class ObjNative:
+    def __init__(self) -> None:
+        self.obj=None
+        self.function=None
+        
 def newFunction():
     import chunk
     function=ObjFunction()
@@ -47,6 +53,13 @@ def newFunction():
     function.obj=allocateObj(ObjType.OBJ_FUNCTION)
     function.chunk=chunk.initChunk()
     return function    
+
+def newNative(function):
+    native=ObjNative()
+    native.obj=allocateObj(ObjType.OBJ_NATIVE)
+    native.function=function #python function
+    return native
+    
         
 def IS_BOOL(value:Value):
     return value.type==ValueType.VAL_BOOL 
@@ -80,6 +93,9 @@ def AS_CSTRING(value:Value):
 def AS_FUNCTION(value:Value):
     return value.asval
 
+def AS_NATIVE(value:Value):
+    return value.asval.function
+
 '''
 directly return object identifier in value
 '''
@@ -99,6 +115,7 @@ def NUMBER_VAL(value):
     value=Value(ValueType.VAL_NUMBER,value)
     return value
 
+
 '''
 return a value contain object
 '''
@@ -116,6 +133,9 @@ def IS_STRING(val):
 def IS_FUNCTION(value:Value):
     return isObjType(value,ObjType.OBJ_FUNCTION)
 
+def IS_NATIVE(value:Value):
+    return isObjType(value,ObjType.OBJ_NATIVE)
+    
 
     
 def isObjType(val:Value,type:ObjType):
@@ -219,7 +239,7 @@ def valuesEqual(a:Value,b:Value)->bool:
 
 def printValue(value:Value):
     if value.type==ValueType.VAL_NUMBER:
-        print("{}".format(AS_NUMBER(value)),end=' ')
+        print("{}".format(AS_NUMBER(value)))
     elif value.type==ValueType.VAL_NIL:
         print("nil")
     elif value.type==ValueType.VAL_BOOL:
@@ -233,6 +253,10 @@ def printObject(value:Value):
         print(AS_CSTRING(value))
     elif t==ObjType.OBJ_FUNCTION:
         printFunction(AS_FUNCTION(value))
+    elif t==ObjType.OBJ_NATIVE:
+        print("<native fn>")
+    else:
+        pass
         
         
 def printFunction(function:ObjFunction):
