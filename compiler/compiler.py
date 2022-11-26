@@ -41,6 +41,7 @@ class Compiler:
         self.locals=[None]*256
         self.localCount=0
         self.scopeDepth=0
+        self.enclosing=None #it's fatherfunction scope
         
 class Parser:
     def __init__(self) -> None:
@@ -58,10 +59,40 @@ def declaration():
     global parser
     if match(TokenType.VAR):
         varDeclaration()
+    elif match(TokenType.FUN):
+        funDeclaration()
     else:
         statement()
     if parser.panicMode:
         synchronize()
+        
+def funDeclaration():
+    global_idx=parseVariable("Expect function name")
+    markInitialized()
+    function(FunctionType.TYPE_FUNCTION)
+    defineVariable(global_idx)
+    
+def function(type:FunctionType):
+    #create a local compiler
+    global current
+    localCompiler=Compiler()
+    initCompiler(localCompiler,type) #init and make it current compiler(chunk)
+    beginScope()
+    consume(TokenType.LEFT_PAREN,"Expect ( after function name")
+    if not check(TokenType.RIGHT_PAREN):
+        while True:
+            current.function.arity+=1
+            if current.function.arity>255:
+                errorAtCurrent("Cant have more than 255 parameters")
+            paramConstant=parseVariable("Expect parameter name")
+            defineVariable(paramConstant)
+            if not match(TokenType.COMMA):
+                break
+    consume(TokenType.RIGHT_PAREN,"Expect ) after function name")
+    consume(TokenType.LEFT_BRACE,"Expect { before function body")
+    block()
+    function=endCompiler() #pop out the function current compiler hold
+    emitBytes(OpCode.OP_CONSTANT,makeConstant(OBJ_VAL(function)))
         
 def varDeclaration():
     #if we are in block that scope>0 parse and define do nothing
@@ -70,7 +101,7 @@ def varDeclaration():
         expression()#only keep variable in stack
     else:
         emitByte(OpCode.OP_NIL)
-    consume(TokenType.SEMICOLON,"expect ';' after value.")
+    consume(TokenType.SEMICOLON,"expect ';' after value in value declaration.")
     defineVariable(global_idx)
     
     
@@ -129,6 +160,8 @@ def defineVariable(global_idx):
     
 def markInitialized():
     global current
+    if current.scopeDepth==0:
+        return 
     current.locals[current.localCount-1].depth=current.scopeDepth
     
 #recieve a identifier        
@@ -178,12 +211,12 @@ def statement():
         
 def printStatement():
     expression()
-    consume(TokenType.SEMICOLON,"expect ';' after value.")
+    consume(TokenType.SEMICOLON,"expect ';' after value. in print")
     emitByte(OpCode.OP_PRINT)
     
 def expressionStatement():
     expression()
-    consume(TokenType.SEMICOLON,"expect ';' after value.")
+    consume(TokenType.SEMICOLON,"expect ';' after value. in expression statment")
     emitByte(OpCode.OP_POP) #you must need to pop the value after a expression is done
     
 def forStatement():
@@ -366,6 +399,27 @@ def or_(canAssign:bool):
     emitByte(OpCode.OP_POP)
     parsePrecedence(Precedence.PREC_OR)
     patchJump(endJump)
+
+#when call are called the function value it's already on the top of stack
+def call_(canAssign:bool):
+    print("call call")
+    argCount=argumentList()
+    emitBytes(OpCode.OP_CALL,argCount)
+    
+def argumentList():
+    argCount=0
+    if not check(TokenType.RIGHT_PAREN):
+        while True:
+            expression()
+            argCount+=1
+            if argCount==255:
+                error("Cant have more than 255 arguments")
+            if not match(TokenType.COMMA):
+                break
+    print("arg count is {}".format(argCount))
+    consume(TokenType.RIGHT_PAREN,"Expect ')' after arguments.")
+    return argCount
+                
  
 DEBUG_PRINT_CODE=True        
 parser=Parser()
@@ -373,7 +427,7 @@ scanner=Scanner(None)
 globalSource=str()
 current=None
 rules={
-    int(TokenType.LEFT_PAREN):ParseRule(grouping,None,Precedence.PREC_NONE),
+    int(TokenType.LEFT_PAREN):ParseRule(grouping,call_,Precedence.PREC_CALL),
     int(TokenType.RIGHT_PAREN):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.LEFT_BRACE):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.RIGHT_BRACE):ParseRule(None,None,Precedence.PREC_NONE),
@@ -437,6 +491,7 @@ def parsePrecedence(precedence:Precedence):
     while precedence<=getRule(parser.current.type).precedence:
         advance()
         infixRule=getRule(parser.previous.type).infix
+        #print(infixRule.__name__)
         infixRule(canAssign)
     if canAssign and match(TokenType.EQUAL):
         error("Invalid assignment target")
@@ -456,9 +511,9 @@ def compile(source)->ObjFunction:
     globalSource=source
     scanner=Scanner(source)
     compiler=Compiler()
+    parser=Parser()
     #impilicit top level function like main, and it store it's own initial chunk
     initCompiler(compiler,FunctionType.TYPE_SCRIPT)
-    parser=Parser()
     advance() #consume one token to parser
     #expression()
     #consume final eof token
@@ -481,11 +536,11 @@ def advance():
         
 def errorAtCurrent(message:str):
     global parser
-    errorAt(parser,parser.current,message)
+    errorAt(parser.current,message)
     
 def error(message:str):
     global parser
-    errorAt(parser,parser.previous,message)
+    errorAt(parser.previous,message)
     
 def errorAt(token:Token,message:str):
     global parser
@@ -553,7 +608,8 @@ def endCompiler():
         if not parser.hadError:
             info=function.name.chars if function.name is not None else "<script>"
             disassembleChunk(currentChunk(),"")
-    return current.function
+    current=current.enclosing
+    return function
     
 def emitReturn():
     emitByte(OpCode.OP_RETURN)
@@ -592,12 +648,14 @@ def patchJump(offset):
 def makeConstant(value:Value):
     constant_idx=addConstant(currentChunk(),value)
     if constant_idx>256:
-        error("Too many constatn in one chunk")
+        error("Too many constant in one chunk")
         return 0
     return constant_idx
 
 def initCompiler(compiler:Compiler,type:FunctionType):
     global current
+    global globalSource
+    global parser 
     local=Local()
     local.depth=0
     local.name.start=""
@@ -607,7 +665,13 @@ def initCompiler(compiler:Compiler,type:FunctionType):
     compiler.scopeDepth=0
     compiler.type=type
     compiler.function=newFunction()
+    compiler.enclosing=current
     current=compiler
+    if type!=FunctionType.TYPE_SCRIPT:
+        start=parser.previous.start
+        length=parser.previous.length
+        nameStr=globalSource[start:start+length]
+        current.function.name=copyString(nameStr,length)
     
 
 

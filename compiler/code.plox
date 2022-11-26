@@ -1,3 +1,4 @@
+
 print 1+2;
 print 3+4;
 print "hi";
@@ -13,3 +14,13 @@ if (1+3==3)
 else{
     print beverage;
 }
+fun areWeHavingItYet()
+{
+    print 1;
+}
+fun a() { b(); }
+fun b() { c(); }
+fun c() {
+ c("too", "many");
+}
+a();

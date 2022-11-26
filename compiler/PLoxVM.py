@@ -77,10 +77,13 @@ def interpret(source:str)->InterpretResult:
     function=compiler.compile(source)
     if function is None:
         return InterpretResult.INTERPRET_COMPILE_ERROR
-    vm.frames[vm.frameCount].function=function
-    vm.frames[vm.frameCount].ip=0
-    vm.frames[vm.frameCount].slots=vm.stack
-    vm.frameCount+=1
+    #vm.frames[vm.frameCount].function=function
+    #vm.frames[vm.frameCount].ip=0
+    #slots only indicate the current call frame's start position
+    #vm.frames[vm.frameCount].slots=0#vm.stack
+    #vm.frameCount+=1
+    push(value.OBJ_VAL(function))
+    callValue(value.OBJ_VAL(function),0)
     return run()
     
     
@@ -125,6 +128,16 @@ def runtimeError(message,*args):
     instruction=frame.ip-0-1
     line=frame.function.chunk.lines[instruction]
     print("[line {}] in script".format(line))
+    for i in reversed(range(0,vm.frameCount)):
+        frame=vm.frames[i]
+        fun=frame.function
+        instruction=frame.ip-0-1
+        info="[line {} ] in ".format(fun.chunk.lines[instruction])
+        if fun.name is None:
+            info+="script"
+        else:
+            info+=fun.name.chars
+        print(info)    
     resetStack()
     
 def isFalsey(val:value.Value)->bool:
@@ -174,11 +187,11 @@ def run()->InterpretResult:
                 v=a+b
                 push(value.NUMBER_VAL(v))
             else:
-                RuntimeError("Operands must be numbers or strings")
+                runtimeError("Operands must be numbers or strings")
                 return InterpretResult.INTERPRET_RUNTIME_ERROR
         elif instruction==chunk.OpCode.OP_DIVIDE:
             if not value.IS_NUMBER(peek(0)) and not value.IS_NUMBER(peek(1)):
-                RuntimeError("Operands must be numbers")
+                runtimeError("Operands must be numbers")
                 return InterpretResult.INTERPRET_RUNTIME_ERROR
             b=value.AS_NUMBER(pop())
             a=value.AS_NUMBER(pop())
@@ -186,7 +199,7 @@ def run()->InterpretResult:
             push(value.NUMBER_VAL(v))
         elif instruction==chunk.OpCode.OP_MULTIPLY:
             if not value.IS_NUMBER(peek(0)) and not value.IS_NUMBER(peek(1)):
-                RuntimeError("Operands must be numbers")
+                runtimeError("Operands must be numbers")
                 return InterpretResult.INTERPRET_RUNTIME_ERROR
             b=value.AS_NUMBER(pop())
             a=value.AS_NUMBER(pop())
@@ -194,7 +207,7 @@ def run()->InterpretResult:
             push(value.NUMBER_VAL(v))
         elif instruction==chunk.OpCode.OP_SUBTRACT:
             if not value.IS_NUMBER(peek(0)) and not value.IS_NUMBER(peek(1)):
-                RuntimeError("Operands must be numbers")
+                runtimeError("Operands must be numbers")
                 return InterpretResult.INTERPRET_RUNTIME_ERROR
             b=value.AS_NUMBER(pop())
             a=value.AS_NUMBER(pop())
@@ -214,7 +227,7 @@ def run()->InterpretResult:
             push(value.BOOL_VAL(value.valuesEqual(a,b)))
         elif instruction==chunk.OpCode.OP_GREATER:
             if not value.IS_NUMBER(peek(0)) and not value.IS_NUMBER(peek(1)):
-                RuntimeError("Operands must be numbers")
+                runtimeError("Operands must be numbers")
                 return InterpretResult.INTERPRET_RUNTIME_ERROR
             b=value.AS_NUMBER(pop())
             a=value.AS_NUMBER(pop())
@@ -222,7 +235,7 @@ def run()->InterpretResult:
             push(value.BOOL_VAL(v)) 
         elif instruction==chunk.OpCode.OP_LESS:
             if not value.IS_NUMBER(peek(0)) and not value.IS_NUMBER(peek(1)):
-                RuntimeError("Operands must be numbers")
+                runtimeError("Operands must be numbers")
                 return InterpretResult.INTERPRET_RUNTIME_ERROR
             b=value.AS_NUMBER(pop())
             a=value.AS_NUMBER(pop())
@@ -252,10 +265,12 @@ def run()->InterpretResult:
                 return InterpretResult.INTERPRET_RUNTIME_ERROR    
         elif instruction==chunk.OpCode.OP_GET_LOCAL:
             slot=read_byte()
-            push(frame.slots[slot])
+            #push(frame.slots[slot])
+            push(vm.stack[frame.slots+slot])
         elif instruction==chunk.OpCode.OP_SET_LOCAL:
             slot=read_byte()
-            frame.slots[slot]=peek(0)
+            vm.stack[frame.slots+slot]=peek(0)
+            #frame.slots[slot]=peek(0)
         elif instruction==chunk.OpCode.OP_JUMP_IF_FALSE:
             offset=read_short()
             if isFalsey(peek(0)):
@@ -266,6 +281,42 @@ def run()->InterpretResult:
         elif instruction==chunk.OpCode.OP_LOOP:
             offset=read_short()
             frame.ip-=offset
+        elif instruction==chunk.OpCode.OP_CALL:
+            #in this time the stack have
+            #funObj arg1 arg2 arg3
+            argCount=read_byte()
+            if not callValue(peek(argCount),argCount):
+                return InterpretResult.INTERPRET_RUNTIME_ERROR
+            #recover frame pointer because we get a new top call stack 
+            frame=vm.frames[vm.frameCount-1]
         else:
             pass
+        
+def call(function:value.ObjFunction,argCount:int):
+    global vm 
+    if argCount!=function.arity:
+        runtimeError("Expect arguments number {} but get {}".format(function.arity,argCount))
+        return False
+    if vm.frameCount==256:
+        runtimeError("Stack overflow")
+        return False
+    frame=vm.frames[vm.frameCount]
+    previousFrame=vm.frames[vm.frameCount-1]
+    assert previousFrame is not None 
+    vm.frames[vm.frameCount].function=function
+    vm.frames[vm.frameCount].ip=0
+    vm.frames[vm.frameCount].slots=vm.stackTop-argCount-1 #slots point at the position of fun obj
+    vm.frameCount+=1
+    return True
+        
+def callValue(callee:value.Value,argCount:int):
+    if value.IS_OBJ(callee):
+        t=value.OBJ_TYPE(callee)
+        if t==value.ObjType.OBJ_FUNCTION:
+            return call(value.AS_FUNCTION(callee),argCount)
+        else:
+            pass 
+    runtimeError("can only call function and classes")
+    return False
+        
         

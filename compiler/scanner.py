@@ -212,7 +212,7 @@ class Scanner(object):
     def identifierType(self):
         c=self.source[self.start]
         if c=='a':
-            return self.checkKeyword(1,2,"nd",TokenType.ADD)
+            return self.checkKeyword(1,2,"nd",TokenType.AND)
         elif c=='c':
             return self.checkKeyword(1,4,"lass",TokenType.CLASS)
         elif c=='e':
@@ -237,7 +237,7 @@ class Scanner(object):
         elif c=='r':
             return self.checkKeyword(1,5,'eturn',TokenType.RETURN)
         elif c=='s':
-            return self.checkKeyword(1,4,"upser",TokenType.SUPER)
+            return self.checkKeyword(1,4,"uper",TokenType.SUPER)
         elif c=='t':
             if self.current-self.start>1:
                 c1=self.source[self.start+1]
