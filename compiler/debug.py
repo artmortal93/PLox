@@ -64,6 +64,14 @@ def disassembleInstruction(c:chunk.Chunk,offset:int):
         return jumpInstruction("OP_LOOP",-1,c,offset)
     elif instruction is chunk.OpCode.OP_CALL:
         return byteInstruction("OP_CALL",c,offset)
+    elif instruction is chunk.OpCode.OP_CLOSURE:
+        offset+=1
+        constant=c.code[offset]
+        offset+=1
+        print("{} {:04d}".format("OP_CLOSURE",constant),end='')
+        value.printValue(c.constants.values[constant])
+        print('\n',end='')
+        return offset
     else:
         print("Unknown Op code {}".format(instruction))
         return offset+1

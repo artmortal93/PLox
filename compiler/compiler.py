@@ -92,9 +92,11 @@ def function(type:FunctionType):
     consume(TokenType.RIGHT_PAREN,"Expect ) after function name")
     consume(TokenType.LEFT_BRACE,"Expect { before function body")
     block()
-    function=endCompiler() #pop out the function current compiler hold
+    fun=endCompiler() #pop out the function current compiler hold
     #endScope() #why missing
-    emitBytes(OpCode.OP_CONSTANT,makeConstant(OBJ_VAL(function)))
+    #before,it lay on the constant area and emit a op_constant command
+    #right now it still sit on the constant area
+    emitBytes(OpCode.OP_CLOSURE,makeConstant(OBJ_VAL(fun)))
         
 def varDeclaration():
     #if we are in block that scope>0 parse and define do nothing

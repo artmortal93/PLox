@@ -10,7 +10,7 @@ from copy import deepcopy
 
 class CallFrame:
     def __init__(self) -> None:
-        self.function=None #the function it contains
+        self.closure=None #the function it contains
         self.slots=None #the first usable vm value stack pointer it can use
         self.ip=None #record the ip of the caller so we can jump to
 
@@ -87,7 +87,10 @@ def interpret(source:str)->InterpretResult:
     #vm.frames[vm.frameCount].slots=0#vm.stack
     #vm.frameCount+=1
     push(value.OBJ_VAL(function))
-    callValue(value.OBJ_VAL(function),0)
+    closure=value.newClosure(function)
+    pop()
+    push(value.OBJ_VAL(closure))
+    callValue(value.OBJ_VAL(closure),0)
     return run()
     
     
@@ -96,7 +99,7 @@ def read_byte():
     #topmost frame
     curFrame=vm.frames[vm.frameCount-1]
     cur_ip=curFrame.ip
-    instruction=curFrame.function.chunk.code[cur_ip]
+    instruction=curFrame.closure.function.chunk.code[cur_ip]
     vm.frames[vm.frameCount-1].ip+=1
     return instruction
 
@@ -104,7 +107,7 @@ def read_constant():
     global vm
      #topmost frame
     curFrame=vm.frames[vm.frameCount-1]
-    return curFrame.function.chunk.constants.values[read_byte()]
+    return curFrame.closure.function.chunk.constants.values[read_byte()]
 
 def read_string():
     global vm
@@ -115,8 +118,8 @@ def read_short():
     global vm
     vm.frames[vm.frameCount-1].ip+=2
     curFrame=vm.frames[vm.frameCount-1]
-    f=curFrame.function.chunk.code[curFrame.ip-1]
-    l=curFrame.function.chunk.code[curFrame.ip-2]
+    f=curFrame.closure.function.chunk.code[curFrame.ip-1]
+    l=curFrame.closure.function.chunk.code[curFrame.ip-2]
     n=(l<<8) | f 
     return n
 
@@ -130,11 +133,11 @@ def runtimeError(message,*args):
     print(message.format(*args))
     frame=vm.frames[vm.frameCount-1]
     instruction=frame.ip-0-1
-    line=frame.function.chunk.lines[instruction]
+    line=frame.closure.function.chunk.lines[instruction]
     print("[line {}] in script".format(line))
     for i in reversed(range(0,vm.frameCount)):
         frame=vm.frames[i]
-        fun=frame.function
+        fun=frame.closure.function
         instruction=frame.ip-0-1
         info="[line {} ] in ".format(fun.chunk.lines[instruction])
         if fun.name is None:
@@ -166,7 +169,7 @@ def run()->InterpretResult:
             for i in range(vm.stackTop):
                 print("[{}]".format(vm.stack[i]),end='')
             print()
-            debug.disassembleInstruction(frame.function.chunk,frame.ip)
+            debug.disassembleInstruction(frame.closure.function.chunk,frame.ip)
         instruction=read_byte()
         if instruction==chunk.OpCode.OP_RETURN:
             result=pop()
@@ -299,13 +302,17 @@ def run()->InterpretResult:
                 return InterpretResult.INTERPRET_RUNTIME_ERROR
             #recover frame pointer because we get a new top call stack 
             frame=vm.frames[vm.frameCount-1]
+        elif instruction==chunk.OpCode.OP_CLOSURE:
+            function=value.AS_FUNCTION(read_constant())
+            closure=value.newClosure(function)
+            push(value.OBJ_VAL(closure))
         else:
             pass
         
-def call(function:value.ObjFunction,argCount:int):
+def call(closure:value.ObjClosure,argCount:int):
     global vm 
-    if argCount!=function.arity:
-        runtimeError("Expect arguments number {} but get {}".format(function.arity,argCount))
+    if argCount!=closure.function.arity:
+        runtimeError("Expect arguments number {} but get {}".format(closure.function.arity,argCount))
         return False
     if vm.frameCount==256:
         runtimeError("Stack overflow")
@@ -319,7 +326,7 @@ def call(function:value.ObjFunction,argCount:int):
         print("upcoming frame:{}".format(function.name.chars))
         print("ought to empty frame:{}".format(vm.frames[vm.frameCount].function.name.chars))
     '''    
-    vm.frames[vm.frameCount].function=function
+    vm.frames[vm.frameCount].closure=closure
     vm.frames[vm.frameCount].ip=0
     vm.frames[vm.frameCount].slots=vm.stackTop-argCount-1 #slots point at the position of fun obj
     vm.frameCount+=1
@@ -334,9 +341,10 @@ def call(function:value.ObjFunction,argCount:int):
 def callValue(callee:value.Value,argCount:int):
     if value.IS_OBJ(callee):
         t=value.OBJ_TYPE(callee)
-        if t==value.ObjType.OBJ_FUNCTION:
-            return call(value.AS_FUNCTION(callee),argCount)
-        elif t==value.ObjType.OBJ_NATIVE:
+        #this is redundant now
+        #if t==value.ObjType.OBJ_FUNCTION:
+        #    return call(value.AS_FUNCTION(callee),argCount)
+        if t==value.ObjType.OBJ_NATIVE:
             native=value.AS_NATIVE(callee)
             arguments=[]
             for i in range(vm.stackTop-argCount,vm.stackTop):
@@ -346,6 +354,8 @@ def callValue(callee:value.Value,argCount:int):
             vm.stackTop-= argCount+1
             push(res)
             return True
+        elif t==value.ObjType.OBJ_CLOSURE:
+            return call(value.AS_CLOSURE(callee),argCount)
         else:
             pass 
     runtimeError("can only call function and classes")

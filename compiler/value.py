@@ -17,6 +17,7 @@ class ObjType(Enum):
     OBJ_STRING=0
     OBJ_FUNCTION=1
     OBJ_NATIVE=2
+    OBJ_CLOSURE=3
 
 #unlike book this is a indicator class only
 class Obj:
@@ -45,22 +46,34 @@ class ObjNative:
         self.obj=None
         self.function=None
         
+class ObjClosure:
+    def __init__(self) -> None:
+        self.obj=None
+        self.function=None
+        
 def newFunction():
     import chunk
-    function=ObjFunction()
+    #function=ObjFunction()
+    function=ALLOCATE_OBJ(ObjFunction,ObjType.OBJ_FUNCTION)
     function.arity=0
     function.name=None
-    function.obj=allocateObj(ObjType.OBJ_FUNCTION)
+    #function.obj=allocateObj(ObjType.OBJ_FUNCTION)
     function.chunk=chunk.initChunk()
     return function    
 
 def newNative(function):
-    native=ObjNative()
-    native.obj=allocateObj(ObjType.OBJ_NATIVE)
+    native=ALLOCATE_OBJ(ObjNative,ObjType.OBJ_NATIVE)
+    #native=ObjNative()
+    #native.obj=allocateObj(ObjType.OBJ_NATIVE)
     native.function=function #python function
     return native
-    
-        
+
+def newClosure(function):
+    closure=ALLOCATE_OBJ(ObjClosure,ObjType.OBJ_CLOSURE)
+    closure.function=function
+    return closure
+     
+
 def IS_BOOL(value:Value):
     return value.type==ValueType.VAL_BOOL 
 
@@ -96,11 +109,16 @@ def AS_FUNCTION(value:Value):
 def AS_NATIVE(value:Value):
     return value.asval.function
 
+def AS_CLOSURE(value:Value):
+    return value.asval
+
 '''
 directly return object identifier in value
 '''
 def AS_OBJ(value:Value):
     return value.asval
+
+
     
 #promoter a native C value to clox value        
 def BOOL_VAL(value):
@@ -135,6 +153,9 @@ def IS_FUNCTION(value:Value):
 
 def IS_NATIVE(value:Value):
     return isObjType(value,ObjType.OBJ_NATIVE)
+
+def IS_CLOSURE(value:Value):
+    return isObjType(value,ObjType.OBJ_CLOSURE)
     
 
     
@@ -145,6 +166,11 @@ def allocateObj(type):
     obj=Obj()
     obj.type=type
     return obj
+
+def ALLOCATE_OBJ(className,type):
+    o=className()
+    o.obj=allocateObj(type)
+    return o
 
 def hashString(key:str,length:int):
     hash=2166136251
@@ -157,10 +183,10 @@ def allocateString(content:str,length:int,hash:int):
     import PLoxVM
     import table
     vMachine=PLoxVM.vm
-    strObj=ObjString()
+    strObj=ALLOCATE_OBJ(ObjString,ObjType.OBJ_STRING)#ObjString()
     strObj.chars=content
     strObj.length=length
-    strObj.obj=allocateObj(ObjType.OBJ_STRING)
+    #strObj.obj=allocateObj(ObjType.OBJ_STRING)
     strObj.hash=hash
     table.tableSet(vMachine.strings,strObj,NIL_VAL())
     return strObj
@@ -255,6 +281,8 @@ def printObject(value:Value):
         printFunction(AS_FUNCTION(value))
     elif t==ObjType.OBJ_NATIVE:
         print("<native fn>")
+    elif t==ObjType.OBJ_CLOSURE:
+        printFunction(AS_CLOSURE(value).function)
     else:
         pass
         
