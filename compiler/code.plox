@@ -53,10 +53,10 @@ print res;
 print end-start;
 var x = "global";
 fun outer() {
- var x = "outer";
+ var x = "outside";
  fun inner() {
  print x;
  }
- inner();
-}
-outer();
+ return inner; }
+var closure = outer();
+closure();

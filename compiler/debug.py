@@ -71,7 +71,21 @@ def disassembleInstruction(c:chunk.Chunk,offset:int):
         print("{} {:04d}".format("OP_CLOSURE",constant),end='')
         value.printValue(c.constants.values[constant])
         print('\n',end='')
+        function=value.AS_FUNCTION(c.constants.values[constant])
+        for j in range(0,function.upvalueCount):
+            isLocal=c.code[offset]
+            offset+=1
+            index=c.code[offset]
+            offset+=1
+            locInfo="local" if isLocal else "upvalue"
+            print("{:04d}  |  {}  {}".format(offset-2,locInfo,index))
         return offset
+    elif instruction is chunk.OpCode.OP_GET_UPVALUE:
+        return byteInstruction("OP_GET_UPVALUE",chunk,offset)
+    elif instruction is chunk.OpCode.OP_SET_UPVALUE:
+        return byteInstruction("OP_SET_UPVALUE",chunk,offset)
+    elif instruction is chunk.OpCode.OP_CLOSE_UPVALUE:
+        return simpleInstruction("OP_CLOSE_UPVALUE",offset)
     else:
         print("Unknown Op code {}".format(instruction))
         return offset+1

@@ -33,6 +33,7 @@ class Local:
     def __init__(self) -> None:
         self.name=Token()
         self.depth=0
+        self.isCaptured=None 
         
 class Compiler:
     def __init__(self) -> None:
@@ -96,7 +97,14 @@ def function(type:FunctionType):
     #endScope() #why missing
     #before,it lay on the constant area and emit a op_constant command
     #right now it still sit on the constant area
+    #closure+upval array
     emitBytes(OpCode.OP_CLOSURE,makeConstant(OBJ_VAL(fun)))
+    #emit the closure upval
+    for i in range(fun.upvalueCount):
+        upval=localCompiler.function.upvalues[i]
+        byte1=1 if upval.isLocal else 0
+        emitByte(byte1)
+        emitByte(upval.index)
         
 def varDeclaration():
     #if we are in block that scope>0 parse and define do nothing
@@ -138,6 +146,7 @@ def addLocal(name:Token):
     local=Local()
     local.name=name
     local.depth=-1
+    local.isCaptured=False
     current.locals[current.localCount]=local
     current.localCount+=1
 
@@ -178,6 +187,11 @@ def namedVariable(name:Token,canAssign:bool):
     if arg!=-1:
         getOp=OpCode.OP_GET_LOCAL
         setOp=OpCode.OP_SET_LOCAL
+    elif resolveUpvalue(current,name)!=-1:
+        arg=resolveUpvalue(current,name) 
+        #this arg is the upvalue index in the compiler upvalue slot
+        getOp=OpCode.OP_GET_UPVALUE
+        setOp=OpCode.OP_SET_UPVALUE
     else:
         arg=identifierConstant(name)
         getOp=OpCode.OP_GET_GLOBAL
@@ -196,6 +210,37 @@ def resolveLocal(compiler:Compiler,name:Token):
                 error("Cant not read local varaible in it's initalizer")
             return i 
     return -1
+
+def resolveUpvalue(compiler:Compiler,name:Token):
+    if compiler.enclosing is None:
+        return -1
+    local=resolveLocal(compiler.enclosing,name)
+    if local!=-1:
+        compiler.enclosing.locals[local].isCaptured=True
+        return addUpvalue(compiler,local,True)
+    upvalue=resolveUpvalue(compiler.enclosing,name)
+    if upvalue!=-1:
+        return addUpvalue(compiler,upvalue,False)
+    return -1
+
+def addUpvalue(compiler:Compiler,index,isLocal):
+    upvalueCount=compiler.function.upvalueCount
+    for i in range(upvalueCount):
+        upVal=compiler.function.upvalues[i]
+        if upVal.index==index and upVal.isLocal==isLocal:
+            return i
+    if upvalueCount==256:
+        error("Too many closure variable in function")
+        return 0
+    val=Upvalue()
+    val.isLocal=isLocal
+    val.index=index #the index is enclosing's slot
+    compiler.function.upvalues[upvalueCount]=val
+    compiler.function.upvalueCount+=1
+    return compiler.function.upvalueCount
+
+
+    
     
 def statement():
     if match(TokenType.PRINT):
@@ -298,7 +343,10 @@ def endScope():
     global current
     current.scopeDepth-=1
     while current.localCount>0 and current.locals[current.localCount-1].depth>current.scopeDepth:
-        emitByte(OpCode.OP_POP)
+        if current.locals[current.localCount-1].isCaptured:
+            emitByte(OpCode.OP_CLOSE_VALUE)
+        else:
+            emitByte(OpCode.OP_POP)
         current.localCount-=1
         
 def ifStatement():
@@ -676,6 +724,7 @@ def initCompiler(compiler:Compiler,type:FunctionType):
     local.depth=0
     local.name.start=""
     local.name.length=0
+    local.isCaptured=False
     compiler.locals[0]=local #first slot for internal vm use
     compiler.localCount=1
     compiler.scopeDepth=0

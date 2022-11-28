@@ -12,17 +12,24 @@ class Value:
     def __init__(self,type:ValueType,asval):
         self.asval=asval #union as double/boolean/obj in c, we directly store in value itself,stop stupid pointer magic 
         self.type=type
+        
+class Upvalue:
+    def __init__(self) -> None:
+        self.isLocal=None
+        self.index=None
 
 class ObjType(Enum):
     OBJ_STRING=0
     OBJ_FUNCTION=1
     OBJ_NATIVE=2
     OBJ_CLOSURE=3
+    OBJ_UPVALUE=4
 
 #unlike book this is a indicator class only
 class Obj:
     def __init__(self):
         self.type=None
+        self.isMarked=False
         
 class ObjString:
     def __init__(self):
@@ -40,6 +47,8 @@ class ObjFunction:
         self.arity=0
         self.chunk=None
         self.name=None
+        self.upvalueCount=0
+        self.upvalues=[]
         
 class ObjNative:
     def __init__(self) -> None:
@@ -50,6 +59,15 @@ class ObjClosure:
     def __init__(self) -> None:
         self.obj=None
         self.function=None
+        self.upvalues=[]
+        self.upvalueCount=None
+        
+class ObjUpvalue:
+    def __init__(self) -> None:
+        self.obj=None
+        self.location=None
+        self.next=None
+        self.closed=None
         
 def newFunction():
     import chunk
@@ -57,6 +75,8 @@ def newFunction():
     function=ALLOCATE_OBJ(ObjFunction,ObjType.OBJ_FUNCTION)
     function.arity=0
     function.name=None
+    function.upvalueCount=0
+    function.upvalues=[None]*256
     #function.obj=allocateObj(ObjType.OBJ_FUNCTION)
     function.chunk=chunk.initChunk()
     return function    
@@ -71,7 +91,17 @@ def newNative(function):
 def newClosure(function):
     closure=ALLOCATE_OBJ(ObjClosure,ObjType.OBJ_CLOSURE)
     closure.function=function
+    upvalues=[None]*function.upvalueCount
+    closure.upvalues=upvalues
+    closure.upvalueCount=function.upvalueCount
     return closure
+
+def newUpvalue(slot):
+    Upvalue=ALLOCATE_OBJ(ObjUpvalue,ObjType.OBJ_UPVALUE)
+    Upvalue.location=slot 
+    Upvalue.next=None
+    Upvalue.closed=NIL_VAL()
+    return Upvalue
      
 
 def IS_BOOL(value:Value):
@@ -283,6 +313,8 @@ def printObject(value:Value):
         print("<native fn>")
     elif t==ObjType.OBJ_CLOSURE:
         printFunction(AS_CLOSURE(value).function)
+    elif t==ObjType.OBJ_UPVALUE:
+        print("upvalue")
     else:
         pass
         

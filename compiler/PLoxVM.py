@@ -32,6 +32,7 @@ class VM:
         for i in range(self.FRAMES_MAX):
             self.frames[i]=CallFrame()
         self.frameCount=0
+        self.openUpvalues=None #linked list of upvalue in everywhere
 
     
 vm=VM()          
@@ -302,10 +303,33 @@ def run()->InterpretResult:
                 return InterpretResult.INTERPRET_RUNTIME_ERROR
             #recover frame pointer because we get a new top call stack 
             frame=vm.frames[vm.frameCount-1]
+        elif instruction==chunk.OpCode.OP_GET_UPVALUE:
+            slot=read_byte()
+            #loc=frame.closure.upvalues[slot].location
+            val=frame.closure.upvalues[slot].location
+            push(val) #right?  
+        elif instruction==chunk.OpCode.OP_SET_UPVALUE:
+            slot=read_byte()
+            frame.closure.upvalues[slot].location=peek(0)
+        elif instruction==chunk.OpCode.OP_CLOSE_UPVALUE:
+            #closeUpvalues(frame.slots) #we dont need this as python pass by ref semantics
+            pop()
         elif instruction==chunk.OpCode.OP_CLOSURE:
             function=value.AS_FUNCTION(read_constant())
             closure=value.newClosure(function)
             push(value.OBJ_VAL(closure))
+            for i in range(0,closure.upvalueCount):
+                isLocal=read_byte()
+                index=read_byte() #the index is the upvalue slot idx
+                if isLocal:
+                    #the magic is that you could always capture
+                    #because the fun declataion order!
+                    #index is the slot number of previous call stack, if local
+                    #index is the idx of enclosing upvalue array, if not local
+                    closure.upvalues[i]=captureUpvalue(frame.slots+index)
+                else:
+                    #the fun declaratinn go recursivly so you must get a value,because the former function get this first
+                    closure.upvalues[i]=frame.closure.upvalues[index]
         else:
             pass
         
@@ -374,4 +398,31 @@ def clockNative(argCount,*args):
     return value.NUMBER_VAL(time.time())
 
 
-        
+def captureUpvalue(local):
+    global vm 
+    prevUpvalue=None
+    upvalue=vm.openUpvalues
+    while upvalue!=None and upvalue!=vm.stack[local]:
+        prevUpvalue=upvalue
+        upvalue=upvalue.next
+    if upvalue!=None and upvalue==local:
+        return upvalue 
+    createdUpvalue=value.newUpvalue(vm.stack[local])
+    createdUpvalue.next=upvalue
+    if prevUpvalue==None:
+        vm.openUpvalues=createdUpvalue
+    else:
+        prevUpvalue.next=createdUpvalue    
+    return createdUpvalue
+
+#in clox this is used to de-ref the abs stack pointer and store things in heap
+#redundant in py,just for ref to book usage
+#we dont need this because we capture by reference,but not a single stack slot pointer
+def closeUpvalues(last):
+    global vm
+    while vm.openUpvalues is not None and vm.openUpvalues.location!=last:
+        upvalue=vm.openUpvalues
+        upvalue.closed=upvalue.location
+        upvalue.location=upvalue.closed
+        vm.openUpvalues=upvalue.next
+    

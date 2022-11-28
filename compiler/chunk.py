@@ -31,6 +31,9 @@ class OpCode(Enum):
     OP_LOOP=23
     OP_CALL=24
     OP_CLOSURE=25
+    OP_GET_UPVALUE=26
+    OP_SET_UPVALUE=27
+    OP_CLOSE_UPVALUE=28
         
 class Chunk:
     __slots__ = ["code", "count","capacity","constants","lines"]
