@@ -81,11 +81,19 @@ def disassembleInstruction(c:chunk.Chunk,offset:int):
             print("{:04d}  |  {}  {}".format(offset-2,locInfo,index))
         return offset
     elif instruction is chunk.OpCode.OP_GET_UPVALUE:
-        return byteInstruction("OP_GET_UPVALUE",chunk,offset)
+        return byteInstruction("OP_GET_UPVALUE",c,offset)
     elif instruction is chunk.OpCode.OP_SET_UPVALUE:
-        return byteInstruction("OP_SET_UPVALUE",chunk,offset)
+        return byteInstruction("OP_SET_UPVALUE",c,offset)
     elif instruction is chunk.OpCode.OP_CLOSE_UPVALUE:
         return simpleInstruction("OP_CLOSE_UPVALUE",offset)
+    elif instruction is chunk.OpCode.OP_CLASS:
+        return constantInstruction("OP_CLASS",c,offset)
+    elif instruction is chunk.OpCode.OP_GET_PROPERTY:
+        return constantInstruction("OP_GET_PROPERTY",c,offset)
+    elif instruction is chunk.OpCode.OP_SET_PROPERTY:
+        return constantInstruction("OP_SET_PROPERTY",c,offset)
+    elif instruction is chunk.OpCode.OP_METHOD:
+        return constantInstruction("OP_METHOD",c,offset)
     else:
         print("Unknown Op code {}".format(instruction))
         return offset+1

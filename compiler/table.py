@@ -21,6 +21,19 @@ def freeTable(table:Table):
     table.entries.clear()
     initTable(table)
     
+def markTable(table:Table):
+    import memory
+    for i in range(table.capacity):
+        entry=table.entries[i]
+        memory.markObject(entry.key)
+        memory.markValue(entry.value)
+        
+def tableRemoveWhite(table:Table):
+    for i in range(table.capacity):
+        e=table.entries[i]
+        if e.key is not None and not e.key.obj.isMarked:
+            tableDelete(table,e.key)
+    
     
 def tableGet(table:Table,key):
     if table.count==0:

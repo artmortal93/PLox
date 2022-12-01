@@ -22,7 +22,7 @@ class VM:
     def __init__(self) -> None:
         self.chunk=None
         self.ip=0 #has no use and replaced by callframe.ip
-        self.DEBUG_TRACE_EXECUTION=False
+        self.DEBUG_TRACE_EXECUTION=True
         self.stack=deque([None]*self.STACK_MAX)
         self.objects=deque() #heap for large objects(DEPRECATED)
         self.strings=table.Table() #able to find all the string it created
@@ -33,7 +33,11 @@ class VM:
             self.frames[i]=CallFrame()
         self.frameCount=0
         self.openUpvalues=None #linked list of upvalue in everywhere
-
+        self.grayCount=0
+        self.grayCapacity=0
+        self.grayStack=[]
+        self.bytesAllocated=0
+        self.nextGC=1024*1024
     
 vm=VM()          
         
@@ -166,10 +170,11 @@ def run()->InterpretResult:
     frame=vm.frames[vm.frameCount-1] #point to the current frame
     while True:
         if vm.DEBUG_TRACE_EXECUTION:
-            print("       ",end='')
-            for i in range(vm.stackTop):
-                print("[{}]".format(vm.stack[i]),end='')
-            print()
+            #print("       ",end='')
+            #for i in range(vm.stackTop):
+                #print("[{}]".format(vm.stack[i]),end='')
+            #    value.printValue(vm.stack[i])
+            #print()
             debug.disassembleInstruction(frame.closure.function.chunk,frame.ip)
         instruction=read_byte()
         if instruction==chunk.OpCode.OP_RETURN:
@@ -314,6 +319,37 @@ def run()->InterpretResult:
         elif instruction==chunk.OpCode.OP_CLOSE_UPVALUE:
             #closeUpvalues(frame.slots) #we dont need this as python pass by ref semantics
             pop()
+        elif instruction==chunk.OpCode.OP_GET_PROPERTY:
+            if not value.IS_INSTANCE(peek(0)):
+                runtimeError("Only instances have properties")
+                return InterpretResult.INTERPRET_RUNTIME_ERROR
+            instance=value.AS_INSTANCE(peek(0))
+            name=read_string()
+            val=None
+            if table.tableGet(instance.fields,name)[0]==True:
+                val=table.tableGet(instance.fields,name)[1].value
+                #print("get val {}".format(val.asval.chars))
+                pop() #the instance is at top if name.field is call
+                push(val)
+                #return
+            #elif not bindMethod(instance.klass,name):
+            #    return InterpretResult.INTERPRET_RUNTIME_ERROR 
+            else:
+                runtimeError("Undefined Property {} in a Class".format(name.chars))
+                return InterpretResult.INTERPRET_RUNTIME_ERROR
+        elif instruction==chunk.OpCode.OP_SET_PROPERTY:
+            if not value.IS_INSTANCE(peek(1)):
+                runtimeError("Only instances have properties")
+                return InterpretResult.INTERPRET_RUNTIME_ERROR
+            instance=value.AS_INSTANCE(peek(1))
+            table.tableSet(instance.fields,read_string(),peek(0))
+            val=pop()
+            pop()
+            push(val)
+        elif instruction==chunk.OpCode.OP_METHOD:
+            defineMethod(read_string())
+        elif instruction==chunk.OpCode.OP_CLASS:
+            push(value.OBJ_VAL(value.newClass(read_string())))
         elif instruction==chunk.OpCode.OP_CLOSURE:
             function=value.AS_FUNCTION(read_constant())
             closure=value.newClosure(function)
@@ -380,6 +416,14 @@ def callValue(callee:value.Value,argCount:int):
             return True
         elif t==value.ObjType.OBJ_CLOSURE:
             return call(value.AS_CLOSURE(callee),argCount)
+        elif t==value.ObjType.OBJ_CLASS:
+            klass=value.AS_CLASS(callee)
+            vm.stack[vm.stackTop-argCount-1]=value.OBJ_VAL(value.newInstance(klass))
+            return True
+        elif t==value.ObjType.OBJ_BOUND_METHOD:
+            bound=value.AS_BOUND_METHOD(callee)
+            #vm.stack[vm.stackTop-argCount-1]=bound.reciever
+            return call(bound.method,argCount)
         else:
             pass 
     runtimeError("can only call function and classes")
@@ -392,6 +436,26 @@ def defineNative(name:str,fun):
     table.tableSet(vm.globals,value.AS_STRING(vm.stack[0]),vm.stack[1])
     pop()
     pop()
+    
+
+def defineMethod(name:value.ObjString):
+    method=peek(0)
+    klass=value.AS_CLASS(peek(1))
+    table.tableSet(klass.methods,name,method)
+    pop() 
+    
+    
+def bindMethod(klass,name):
+    method=None 
+    res=table.tableGet(klass.methods,name)    
+    if res[0]==False:
+        runtimeError("Undefined method property {}".format(name.chars))
+        return False 
+    method=res[1].value
+    bound=value.newBoundMethod(peek(0),value.AS_CLOSURE(method))
+    pop()
+    push(value.OBJ_VAL(bound))
+    return True
     
 def clockNative(argCount,*args):
     import time

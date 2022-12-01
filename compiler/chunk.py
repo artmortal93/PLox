@@ -34,6 +34,10 @@ class OpCode(Enum):
     OP_GET_UPVALUE=26
     OP_SET_UPVALUE=27
     OP_CLOSE_UPVALUE=28
+    OP_CLASS=29
+    OP_SET_PROPERTY=30
+    OP_GET_PROPERTY=31
+    OP_METHOD=32
         
 class Chunk:
     __slots__ = ["code", "count","capacity","constants","lines"]
@@ -83,7 +87,9 @@ def freeChunk(chunk:Chunk):
     return Chunk([],0,0)
 
 def addConstant(chunk:Chunk,val:value.Value):
+    #push(val) for gc fixed
     value.writeValueArray(chunk.constants,val)
+    #pop()
     return chunk.constants.count-1
     
     

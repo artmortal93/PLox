@@ -17,6 +17,7 @@ class Upvalue:
     def __init__(self) -> None:
         self.isLocal=None
         self.index=None
+        self.closed=None
 
 class ObjType(Enum):
     OBJ_STRING=0
@@ -24,12 +25,16 @@ class ObjType(Enum):
     OBJ_NATIVE=2
     OBJ_CLOSURE=3
     OBJ_UPVALUE=4
+    OBJ_CLASS=5
+    OBJ_INSTANCE=6
+    OBJ_BOUND_METHOD=7
 
 #unlike book this is a indicator class only
 class Obj:
     def __init__(self):
         self.type=None
         self.isMarked=False
+        #self.next=None
         
 class ObjString:
     def __init__(self):
@@ -69,6 +74,24 @@ class ObjUpvalue:
         self.next=None
         self.closed=None
         
+class ObjClass:
+    def __init__(self) -> None:
+        self.obj=None
+        self.name=None
+        self.methods=None
+        
+class ObjInstance:
+    def __init__(self) -> None:
+        self.obj=None
+        self.klass=None
+        self.fields=None 
+        
+class ObjBoundMethod:
+    def __init__(self) -> None:
+        self.obj=None
+        self.reciever=None #this means the class instance we should bond
+        self.method=None 
+        
 def newFunction():
     import chunk
     #function=ObjFunction()
@@ -102,7 +125,30 @@ def newUpvalue(slot):
     Upvalue.next=None
     Upvalue.closed=NIL_VAL()
     return Upvalue
+
+def newClass(name):
+    import table
+    klass=ALLOCATE_OBJ(ObjClass,ObjType.OBJ_CLASS)
+    klass.name=name
+    klass.methods=table.Table()
+    table.initTable(klass.methods)
+    return klass 
+
+def newInstance(klass:ObjClass):
+    import table
+    instance=ALLOCATE_OBJ(ObjInstance,ObjType.OBJ_INSTANCE)
+    instance.klass=klass
+    t=table.Table()
+    table.initTable(t)
+    instance.fields=t
+    return instance
      
+def newBoundMethod(reciever:Value,method:ObjClosure):
+    bound=ALLOCATE_OBJ(ObjBoundMethod,ObjType.OBJ_BOUND_METHOD)
+    bound.reciever=reciever
+    bound.method=method
+    return bound 
+
 
 def IS_BOOL(value:Value):
     return value.type==ValueType.VAL_BOOL 
@@ -116,8 +162,14 @@ def IS_NIL(value:Value):
 def IS_OBJ(value:Value):
     return value.type==ValueType.VAL_OBJ
 
+def IS_CLASS(value:Value):
+    return isObjType(value,ObjType.OBJ_CLASS)
 
+def IS_INSTANCE(value:Value):
+    return isObjType(value,ObjType.OBJ_INSTANCE)
 
+def IS_BOUND_METHOD(value:Value):
+    return isObjType(value,ObjType.OBJ_BOUND_METHOD)
 
 def AS_BOOL(value:Value):
     return value.asval
@@ -142,12 +194,20 @@ def AS_NATIVE(value:Value):
 def AS_CLOSURE(value:Value):
     return value.asval
 
+def AS_CLASS(value:Value):
+    return value.asval
+
+def AS_INSTANCE(value:Value):
+    return value.asval
+
 '''
 directly return object identifier in value
 '''
 def AS_OBJ(value:Value):
     return value.asval
 
+def AS_BOUND_METHOD(value:Value):
+    return value.asval
 
     
 #promoter a native C value to clox value        
@@ -187,7 +247,8 @@ def IS_NATIVE(value:Value):
 def IS_CLOSURE(value:Value):
     return isObjType(value,ObjType.OBJ_CLOSURE)
     
-
+def IS_INSTANCE(value:Value):
+    return isObjType(value,ObjType.OBJ_INSTANCE)
     
 def isObjType(val:Value,type:ObjType):
     return IS_OBJ(val) and OBJ_TYPE(val)==type  
@@ -198,8 +259,10 @@ def allocateObj(type):
     return obj
 
 def ALLOCATE_OBJ(className,type):
+    import PLoxVM
     o=className()
     o.obj=allocateObj(type)
+    PLoxVM.vm.objects.appendleft(o)
     return o
 
 def hashString(key:str,length:int):
@@ -212,6 +275,7 @@ def hashString(key:str,length:int):
 def allocateString(content:str,length:int,hash:int):
     import PLoxVM
     import table
+    #push pop for gc bug
     vMachine=PLoxVM.vm
     strObj=ALLOCATE_OBJ(ObjString,ObjType.OBJ_STRING)#ObjString()
     strObj.chars=content
@@ -315,6 +379,12 @@ def printObject(value:Value):
         printFunction(AS_CLOSURE(value).function)
     elif t==ObjType.OBJ_UPVALUE:
         print("upvalue")
+    elif t==ObjType.OBJ_CLASS:
+        print(AS_CLASS(value).name.chars)
+    elif t==ObjType.OBJ_INSTANCE:
+        print('{} instance'.format(AS_INSTANCE(value).klass.name.chars))        
+    elif t==ObjType.OBJ_BOUND_METHOD:
+        printFunction(AS_BOUND_METHOD(value).method.function)
     else:
         pass
         

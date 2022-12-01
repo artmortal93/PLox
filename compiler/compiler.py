@@ -28,6 +28,7 @@ class Precedence(IntEnum):
 class FunctionType(Enum):
     TYPE_FUNCTION=0
     TYPE_SCRIPT=1
+    TYPE_METHOD=2
     
 class Local:
     def __init__(self) -> None:
@@ -59,13 +60,35 @@ def expression():
 def declaration():
     global parser
     if match(TokenType.VAR):
+        #print("trigger decl var")
         varDeclaration()
     elif match(TokenType.FUN):
         funDeclaration()
+    elif match(TokenType.CLASS):
+        #print("trigger decl class")
+        classDeclaration()
     else:
+        #print("trigger decl statment")
         statement()
     if parser.panicMode:
         synchronize()
+        
+def classDeclaration():
+    global parser
+    consume(TokenType.IDENTIFER,"Expect class name")
+    className=parser.previous
+    nameConstant=identifierConstant(parser.previous)
+    declareVariable()
+    emitBytes(OpCode.OP_CLASS,nameConstant)
+    defineVariable(nameConstant)
+    #namedVariable(className,False) #push the name of class
+    consume(TokenType.LEFT_BRACE,"Expect '{' before class body.")
+    #lox has not field declatation, only on init
+    #while not check(TokenType.RIGHT_BRACE) and not check(TokenType.EOF):
+    #    method()
+    consume(TokenType.RIGHT_BRACE,"Expect '}' after class body.")
+    #emitByte(OpCode.OP_POP) #pop the class name variable
+    
         
 def funDeclaration():
     global_idx=parseVariable("Expect function name")
@@ -105,6 +128,15 @@ def function(type:FunctionType):
         byte1=1 if upval.isLocal else 0
         emitByte(byte1)
         emitByte(upval.index)
+        
+def method():
+    global parser 
+    consume(TokenType.IDENTIFER,"Expect method name")
+    constant=identifierConstant(parser.previous)
+    type=FunctionType.TYPE_FUNCTION
+    #will pop a closure on stack top
+    function(type)
+    emitBytes(OpCode.OP_METHOD,constant)
         
 def varDeclaration():
     #if we are in block that scope>0 parse and define do nothing
@@ -160,6 +192,13 @@ def identifierEqual(a:Token,b:Token):
     global globalSource
     if a.length != b.length:
         return False
+    aStr=None
+    bStr=None
+    #if a.start=="this" or b.start=="this":
+    #    aStr=globalSource[a.start:a.start+a.length] if type(a.start) is not str else a.start
+    #    bStr=globalSource[b.start:b.start+b.length] if type(b.start) is not str else b.start
+    #    print(aStr,bStr)
+    #else:
     aStr=globalSource[a.start:a.start+a.length]
     bStr=globalSource[b.start:b.start+b.length]
     return aStr==bStr
@@ -238,10 +277,7 @@ def addUpvalue(compiler:Compiler,index,isLocal):
     compiler.function.upvalues[upvalueCount]=val
     compiler.function.upvalueCount+=1
     return compiler.function.upvalueCount
-
-
-    
-    
+       
 def statement():
     if match(TokenType.PRINT):
         printStatement()
@@ -363,8 +399,6 @@ def ifStatement():
         statement()
     patchJump(elseJump)
     
-    
-
 #detail parse rule
 #the rule number and unary here are not going into higher precedence
 #assume the token has been scan and another advance has been call
@@ -443,6 +477,7 @@ def string(canAssign:bool):
     source_str=globalSource[start+1:start+length-1]
     val=OBJ_VAL(copyString(source_str,len(source_str)))
     PLoxVM.vm.objects.appendleft(val)
+    #val.obj.next=PLoxVM.vm.objects
     emitConstant(val)
     
 def variable(canAssign:bool):
@@ -465,11 +500,26 @@ def or_(canAssign:bool):
     parsePrecedence(Precedence.PREC_OR)
     patchJump(endJump)
 
+def dot(canAssign:bool):
+    consume(TokenType.IDENTIFER,"Expect property after dot")
+    name=identifierConstant(parser.previous)
+    if canAssign and match(TokenType.EQUAL):
+        expression()
+        emitBytes(OpCode.OP_SET_PROPERTY,name)
+    else:
+        emitBytes(OpCode.OP_GET_PROPERTY,name)
+
+
 #when call are called the function value it's already on the top of stack
 def call_(canAssign:bool):
     argCount=argumentList()
     emitBytes(OpCode.OP_CALL,argCount)
     
+    
+
+def this_(canAssign:bool):
+    variable(False)
+
 def argumentList():
     argCount=0
     if not check(TokenType.RIGHT_PAREN):
@@ -495,7 +545,7 @@ rules={
     int(TokenType.LEFT_BRACE):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.RIGHT_BRACE):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.COMMA):ParseRule(None,None,Precedence.PREC_NONE),
-    int(TokenType.DOT):ParseRule(None,None,Precedence.PREC_NONE),
+    int(TokenType.DOT):ParseRule(None,dot,Precedence.PREC_CALL),
     int(TokenType.MINUS):ParseRule(unary,binary,Precedence.PREC_TERM),
     int(TokenType.PLUS):ParseRule(None,binary,Precedence.PREC_TERM),
     int(TokenType.SEMICOLON):ParseRule(None,None,Precedence.PREC_NONE),
@@ -524,7 +574,7 @@ rules={
     int(TokenType.PRINT):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.RETURN):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.SUPER):ParseRule(None,None,Precedence.PREC_NONE),
-    int(TokenType.THIS):ParseRule(None,None,Precedence.PREC_NONE),
+    int(TokenType.THIS):ParseRule(this_,None,Precedence.PREC_NONE),
     int(TokenType.TRUE):ParseRule(literal,None,Precedence.PREC_NONE),
     int(TokenType.VAR):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.WHILE):ParseRule(None,None,Precedence.PREC_NONE),
@@ -584,7 +634,18 @@ def compile(source)->ObjFunction:
     while match(TokenType.EOF) is False:
         declaration()
     #function=endCompiler()
-    return None if parser.hadError else endCompiler()
+    if parser.hadError:
+        print("[Compile]parser panic quit")
+        return None
+    else:
+        return endCompiler()
+
+def markCompilerRoots():
+    import memory
+    cper=current
+    while cper!=None:
+        memory.markObject(cper.function)
+        cper=cper.enclosing
      
 def advance():
     global scanner
@@ -722,6 +783,10 @@ def initCompiler(compiler:Compiler,type:FunctionType):
     global parser 
     local=Local()
     local.depth=0
+    #if type!=FunctionType.TYPE_FUNCTION:
+    #    local.name.start="this"
+    #    local.name.length=4
+    #else:       
     local.name.start=""
     local.name.length=0
     local.isCaptured=False
@@ -739,7 +804,7 @@ def initCompiler(compiler:Compiler,type:FunctionType):
         start=parser.previous.start
         length=parser.previous.length
         nameStr=globalSource[start:start+length]
-        print("init compiler for {}".format(nameStr))
+        #print("init compiler for {}".format(nameStr))
         current.function.name=copyString(nameStr,length)
     
 
