@@ -22,7 +22,7 @@ class VM:
     def __init__(self) -> None:
         self.chunk=None
         self.ip=0 #has no use and replaced by callframe.ip
-        self.DEBUG_TRACE_EXECUTION=True
+        self.DEBUG_TRACE_EXECUTION=False
         self.stack=deque([None]*self.STACK_MAX)
         self.objects=deque() #heap for large objects(DEPRECATED)
         self.strings=table.Table() #able to find all the string it created
@@ -331,7 +331,7 @@ def run()->InterpretResult:
                 #print("get val {}".format(val.asval.chars))
                 pop() #the instance is at top if name.field is call
                 push(val)
-                #return
+                #do not return, we continue
             #elif not bindMethod(instance.klass,name):
             #    return InterpretResult.INTERPRET_RUNTIME_ERROR 
             else:
