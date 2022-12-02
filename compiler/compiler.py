@@ -81,13 +81,13 @@ def classDeclaration():
     declareVariable()
     emitBytes(OpCode.OP_CLASS,nameConstant)
     defineVariable(nameConstant)
-    #namedVariable(className,False) #push the name of class
+    namedVariable(className,False) #push the name of class
     consume(TokenType.LEFT_BRACE,"Expect '{' before class body.")
     #lox has not field declatation, only on init
     while not check(TokenType.RIGHT_BRACE) and not check(TokenType.EOF):
         method()
     consume(TokenType.RIGHT_BRACE,"Expect '}' after class body.")
-    #emitByte(OpCode.OP_POP) #pop the class name variable
+    emitByte(OpCode.OP_POP) #pop the class name variable
     
         
 def funDeclaration():

@@ -330,13 +330,17 @@ def run()->InterpretResult:
                 val=table.tableGet(instance.fields,name)[1].value
                 #print("get val {}".format(val.asval.chars))
                 pop() #the instance is at top if name.field is call
-                push(val)
+                push(val)#push the function
+                continue
                 #do not return, we continue
-            #elif not bindMethod(instance.klass,name):
-            #    return InterpretResult.INTERPRET_RUNTIME_ERROR 
+            tryBind=bindMethod(instance.klass,name)
+            if tryBind==False:
+                runtimeError("Undefined method {} in a Class".format(name.chars))
+                return InterpretResult.INTERPRET_RUNTIME_ERROR 
             else:
-                runtimeError("Undefined Property {} in a Class".format(name.chars))
-                return InterpretResult.INTERPRET_RUNTIME_ERROR
+                continue
+            #runtimeError("Undefined Property {} in a Class".format(name.chars))
+            #return InterpretResult.INTERPRET_RUNTIME_ERROR
         elif instruction==chunk.OpCode.OP_SET_PROPERTY:
             if not value.IS_INSTANCE(peek(1)):
                 runtimeError("Only instances have properties")
