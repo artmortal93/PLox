@@ -7,12 +7,12 @@ The purpose is Code to learn,JLox is good,but CLox are somehow trouble some, exp
 and pointer tricks in C,it make you feel bad because basically you have no choice but just copy and paste when you are reading the second part of the book when try to follow.
 I try to simplify in py get rid of those flying global/macro s**t and here's the outcome.
 
-Both two language interpreter/compiler have a bootstrap file call code.plox so you could try to run in python
-Usage example:
-For execute a file in interpreter: \n
-cd /interpreter \n
-python3 PLoxMain.py code.plox \n
-For execute a file in compiler: \n
-cd /compiler \n
-python3 main.py code.plox \n
+Both two language interpreter/compiler have a bootstrap file call code.plox so you could try to run in python <br />
+Usage example: <br />
+For execute a file in interpreter: <br />
+cd /interpreter <br />
+python3 PLoxMain.py code.plox <br />
+For execute a file in compiler: <br />
+cd /compiler <br />
+python3 main.py code.plox <br />
 
