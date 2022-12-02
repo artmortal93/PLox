@@ -38,6 +38,7 @@ class VM:
         self.grayStack=[]
         self.bytesAllocated=0
         self.nextGC=1024*1024
+        self.initString=None
     
 vm=VM()          
         
@@ -54,11 +55,13 @@ def initVM():
     global vm
     table.initTable(vm.strings)
     table.initTable(vm.globals)
+    vm.initString=value.copyString("init",4)
     defineNative("clock",clockNative)
     resetStack()
     
 def freeVM():
     global vm
+    vm.initString=None 
     table.freeTable(vm.strings)
     table.freeTable(vm.globals)
     freeObjects()
@@ -104,6 +107,7 @@ def read_byte():
     #topmost frame
     curFrame=vm.frames[vm.frameCount-1]
     cur_ip=curFrame.ip
+    #assert len(curFrame.closure.function.chunk.code)>cur_ip,curFrame.closure.function.chunk.code
     instruction=curFrame.closure.function.chunk.code[cur_ip]
     vm.frames[vm.frameCount-1].ip+=1
     return instruction
@@ -350,6 +354,11 @@ def run()->InterpretResult:
             val=pop()
             pop()
             push(val)
+        elif instruction==chunk.OpCode.OP_GET_SUPER:
+            name=read_string()
+            superclass=value.AS_CLASS(pop()) #? how do it know
+            if not bindMethod(superclass,name):
+                return InterpretResult.INTERPRET_RUNTIME_ERROR
         elif instruction==chunk.OpCode.OP_METHOD:
             defineMethod(read_string())
         elif instruction==chunk.OpCode.OP_CLASS:
@@ -370,8 +379,43 @@ def run()->InterpretResult:
                 else:
                     #the fun declaratinn go recursivly so you must get a value,because the former function get this first
                     closure.upvalues[i]=frame.closure.upvalues[index]
+        elif instruction==chunk.OpCode.OP_INVOKE:
+            method=read_string()
+            argCount=read_byte()
+            if not invoke(method,argCount):
+                return InterpretResult.INTERPRET_RUNTIME_ERROR
+            frame=vm.frames[vm.frameCount-1]
+        elif instruction==chunk.OpCode.OP_SUPER_INVOKE:
+            method=read_string()
+            argCount=read_byte()
+            superclass=value.AS_CLASS(pop())
+            if not invokeFromClass(superclass,method,argCount):
+                return InterpretResult.INTERPRET_RUNTIME_ERROR
+            frame=vm.frames[vm.frameCount-1]
         else:
             pass
+        
+        
+def invoke(name,argCount):
+    reciever=peek(argCount)
+    if not value.IS_INSTANCE(reciever):
+        runtimeError("Only instances have methods")
+        return False
+    instance=value.AS_INSTANCE(reciever)
+    res=table.tableGet(instance.fields,name)
+    if res[0]==True:
+        v=res[1]
+        vm.stack[vm.stackTop-argCount-1]=v
+        return callValue(v,argCount)
+    return invokeFromClass(instance.klass,name,argCount)
+
+def invokeFromClass(klass,name,argCount):
+    res=table.tableGet(klass.methods,name)
+    if res[0]==False:
+        runtimeError("Undefined Property {}",name.chars)
+        return False
+    method=res[1].value
+    return call(value.AS_CLOSURE(method),argCount)
         
 def call(closure:value.ObjClosure,argCount:int):
     global vm 
@@ -423,11 +467,27 @@ def callValue(callee:value.Value,argCount:int):
         elif t==value.ObjType.OBJ_CLASS:
             klass=value.AS_CLASS(callee)
             vm.stack[vm.stackTop-argCount-1]=value.OBJ_VAL(value.newInstance(klass))
+            res=table.tableGet(klass.methods,vm.initString)
+            if res[0] is True:
+                return call(value.AS_CLOSURE(res[1].value),argCount)
+            else:
+                if argCount!=0:
+                    runtimeError("Expected 0 argument for initalizer but got {}".format(argCount))
+                    return False
             return True
         elif t==value.ObjType.OBJ_BOUND_METHOD:
             bound=value.AS_BOUND_METHOD(callee)
-            #vm.stack[vm.stackTop-argCount-1]=bound.reciever
+            vm.stack[vm.stackTop-argCount-1]=bound.reciever
             return call(bound.method,argCount)
+        elif t==value.ObjType.OP_INHERIT:
+            superclass=value.AS_CLASS(peek(0))
+            subclass=value.AS_CLASS(peek(1))
+            if not value.IS_CLASS(superclass):
+                runtimeError("Super class must be a class")
+                return InterpretResult.INTERPRET_RUNTIME_ERROR
+            #copy and cover, OP_INHERIT IS before class declaration, so no shadowing
+            table.tableAddAll(superclass.methods,subclass.methods)
+            pop()
         else:
             pass 
     runtimeError("can only call function and classes")

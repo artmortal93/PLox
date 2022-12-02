@@ -24,6 +24,8 @@ def freeObject(obj):
 def markRoots():
     import PLoxVM
     import table
+    import compiler
+    compiler.markCompilerRoots()
     for i in range(PLoxVM.vm.stackTop):
         slot=PLoxVM.vm[i]
         markValue(slot)
@@ -34,6 +36,7 @@ def markRoots():
         markObject(upvalue)
         upvalue=upvalue.next
     table.markTable(PLoxVM.vm.globals)
+    markObject(PLoxVM.vm.initString)
         
 def markValue(val):
     import value

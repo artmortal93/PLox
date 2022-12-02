@@ -94,6 +94,14 @@ def disassembleInstruction(c:chunk.Chunk,offset:int):
         return constantInstruction("OP_SET_PROPERTY",c,offset)
     elif instruction is chunk.OpCode.OP_METHOD:
         return constantInstruction("OP_METHOD",c,offset)
+    elif instruction is chunk.OpCode.OP_INVOKE:
+        return invokeInstruction("OP_INVOKE",c,offset)
+    elif instruction is chunk.OpCode.OP_INHERIT:
+        return simpleInstruction("OP_INHERIT",offset)
+    elif instruction is chunk.OpCode.OP_GET_SUPER:
+        return constantInstruction("OP_GET_SUPER",c,offset)
+    elif instruction is chunk.OpCode.OP_SUPER_INVOKE:
+        return invokeInstruction("OP_SUPER_INVOKE",c,offset)
     else:
         print("Unknown Op code {}".format(instruction))
         return offset+1
@@ -119,6 +127,14 @@ def jumpInstruction(name,sign,c,offset):
     jump2=c.code[offset+2]
     jump=jump1 | jump2 
     print("{} {}->{}".format(name,offset,offset+3+sign*jump))
+    return offset+3
+
+def invokeInstruction(name,c,offset):
+    constant=c.code[offset+1]
+    argCount=c.code[offset+2]
+    print("{} {} {}",name,argCount,constant,end='')
+    value.printValue(c.constants.values[constant])
+    print("")
     return offset+3
 
 

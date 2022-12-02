@@ -29,6 +29,7 @@ class FunctionType(Enum):
     TYPE_FUNCTION=0
     TYPE_SCRIPT=1
     TYPE_METHOD=2
+    TYPE_INITALIZER=3
     
 class Local:
     def __init__(self) -> None:
@@ -44,6 +45,12 @@ class Compiler:
         self.localCount=0
         self.scopeDepth=0
         self.enclosing=None #it's fatherfunction scope
+        
+class ClassCompiler:
+    def __init__(self) -> None:
+        self.enclosing=None
+        self.name=None
+        self.hasSuperclass=False
         
 class Parser:
     def __init__(self) -> None:
@@ -75,19 +82,43 @@ def declaration():
         
 def classDeclaration():
     global parser
+    global currentClass
     consume(TokenType.IDENTIFER,"Expect class name")
     className=parser.previous
     nameConstant=identifierConstant(parser.previous)
     declareVariable()
     emitBytes(OpCode.OP_CLASS,nameConstant)
     defineVariable(nameConstant)
+    classCompiler=ClassCompiler()
+    classCompiler.name=parser.previous
+    classCompiler.hasSuperclass=False
+    classCompiler.enclosing=currentClass
+    currentClass=classCompiler
+    #superclass
+    if match(TokenType.LESS):
+        consume(TokenType.IDENTIFER,"Expect super class")
+        variable(False)#load the global base class variable on stack
+        if identifierEqual(className,parser.previous):
+            error("A class cant inherit itself")
+        beginScope()
+        addLocal(syntheticToken("super")) #here link stack to super and use upvalue techinique to store it
+        defineVariable(0)
+        namedVariable(className, False) #load the subclass on stack
+        emitByte(OpCode.OP_INHERIT)#only subclass being poped, base class remained
+        classCompiler.hasSuperclass=True
+    #superclass    
+    
+    
     namedVariable(className,False) #push the name of class
     consume(TokenType.LEFT_BRACE,"Expect '{' before class body.")
     #lox has not field declatation, only on init
     while not check(TokenType.RIGHT_BRACE) and not check(TokenType.EOF):
-        method()
+        method() #method will find super in compile time
     consume(TokenType.RIGHT_BRACE,"Expect '}' after class body.")
     emitByte(OpCode.OP_POP) #pop the class name variable
+    if classCompiler.hasSuperclass:
+        endScope()
+    currentClass=currentClass.enclosing #pop
     
         
 def funDeclaration():
@@ -131,9 +162,13 @@ def function(type:FunctionType):
         
 def method():
     global parser 
+    global globalSource
     consume(TokenType.IDENTIFER,"Expect method name")
     constant=identifierConstant(parser.previous)
-    type=FunctionType.TYPE_FUNCTION
+    type=FunctionType.TYPE_METHOD
+    funname=globalSource[parser.previous.start:parser.previous.start+4]
+    if parser.previous.length==4 and funname=="init":
+        type=FunctionType.TYPE_INITALIZER
     #will pop a closure on stack top
     function(type)
     emitBytes(OpCode.OP_METHOD,constant)
@@ -194,13 +229,13 @@ def identifierEqual(a:Token,b:Token):
         return False
     aStr=None
     bStr=None
-    #if a.start=="this" or b.start=="this":
-    #    aStr=globalSource[a.start:a.start+a.length] if type(a.start) is not str else a.start
-    #    bStr=globalSource[b.start:b.start+b.length] if type(b.start) is not str else b.start
+    if type(a.start) is str or type(b.start) is str:
+        aStr=globalSource[a.start:a.start+a.length] if type(a.start) is not str else a.start
+        bStr=globalSource[b.start:b.start+b.length] if type(b.start) is not str else b.start
     #    print(aStr,bStr)
-    #else:
-    aStr=globalSource[a.start:a.start+a.length]
-    bStr=globalSource[b.start:b.start+b.length]
+    else:
+        aStr=globalSource[a.start:a.start+a.length]
+        bStr=globalSource[b.start:b.start+b.length]
     return aStr==bStr
 
 def defineVariable(global_idx):
@@ -216,7 +251,7 @@ def markInitialized():
         return 
     current.locals[current.localCount-1].depth=current.scopeDepth
     
-#recieve a identifier        
+#recieve a identifier which must be defined already and find it's coresponding get set location   
 def namedVariable(name:Token,canAssign:bool):
     global current
     getOp=0
@@ -362,6 +397,8 @@ def returnStatement():
     if match(TokenType.SEMICOLON):
         emitReturn()
     else:
+        if current.type==FunctionType.TYPE_INITALIZER:
+            error("Cant not return a value from a initalizer")
         expression()
         consume(TokenType.SEMICOLON,"Expect ';' after return value")
         emitByte(OpCode.OP_RETURN)
@@ -380,7 +417,7 @@ def endScope():
     current.scopeDepth-=1
     while current.localCount>0 and current.locals[current.localCount-1].depth>current.scopeDepth:
         if current.locals[current.localCount-1].isCaptured:
-            emitByte(OpCode.OP_CLOSE_VALUE)
+            emitByte(OpCode.OP_CLOSE_UPVALUE)
         else:
             emitByte(OpCode.OP_POP)
         current.localCount-=1
@@ -506,6 +543,10 @@ def dot(canAssign:bool):
     if canAssign and match(TokenType.EQUAL):
         expression()
         emitBytes(OpCode.OP_SET_PROPERTY,name)
+    elif match(TokenType.LEFT_PAREN):
+        argCount=argumentList()
+        emitBytes(OpCode.OP_INVOKE,name)
+        emitByte(argCount)
     else:
         emitBytes(OpCode.OP_GET_PROPERTY,name)
 
@@ -518,7 +559,32 @@ def call_(canAssign:bool):
     
 
 def this_(canAssign:bool):
+    global currentClass
+    if currentClass == None:
+        error("Cant use this outside of class")
+        return 
     variable(False)
+
+def super_(canAssign:bool):
+    if currentClass is None:
+        error("Can use super outside of a class")
+    elif not currentClass.hasSuperclass:
+        error("Cant use super in a class with no superclass")
+    consume(TokenType.DOT,"Expect . after super ")
+    consume(TokenType.IDENTIFER,"Expect method of super")
+    name=identifierConstant(parser.previous)
+    namedVariable(syntheticToken("this"),False)
+    if match(TokenType.LEFT_PAREN):
+        argCount=argumentList()
+        namedVariable(syntheticToken("super"),False)
+        emitBytes(OpCode.OP_SUPER_INVOKE,name)
+        emitByte(argCount)
+    else:
+        namedVariable(syntheticToken("super"),False)
+        emitBytes(OpCode.OP_GET_SUPER,name)
+    
+    
+
 
 def argumentList():
     argCount=0
@@ -536,6 +602,7 @@ def argumentList():
  
 DEBUG_PRINT_CODE=True        
 parser=Parser()
+currentClass=None #classCompiler for super class
 scanner=Scanner(None)
 globalSource=str()
 current=None
@@ -573,7 +640,7 @@ rules={
     int(TokenType.OR):ParseRule(None,or_,Precedence.PREC_OR),
     int(TokenType.PRINT):ParseRule(None,None,Precedence.PREC_NONE),
     int(TokenType.RETURN):ParseRule(None,None,Precedence.PREC_NONE),
-    int(TokenType.SUPER):ParseRule(None,None,Precedence.PREC_NONE),
+    int(TokenType.SUPER):ParseRule(super_,None,Precedence.PREC_NONE),
     int(TokenType.THIS):ParseRule(this_,None,Precedence.PREC_NONE),
     int(TokenType.TRUE):ParseRule(literal,None,Precedence.PREC_NONE),
     int(TokenType.VAR):ParseRule(None,None,Precedence.PREC_NONE),
@@ -714,6 +781,12 @@ def synchronize():
         if parser.current.type in start_point:
             return 
         advance()
+        
+def syntheticToken(text):
+    token=Token()
+    token.start=text
+    token.length=len(text)
+    return token
           
 def emitByte(byte):
     global parser
@@ -736,8 +809,12 @@ def endCompiler():
     return function
     
 def emitReturn():
-    emitByte(OpCode.OP_NIL)
-    emitByte(OpCode.OP_RETURN)
+    if current.type==FunctionType.TYPE_INITALIZER:
+        emitBytes(OpCode.OP_GET_LOCAL,0) #get the 'this' instance if init fun is called
+        emitByte(OpCode.OP_RETURN)
+    else:
+        emitByte(OpCode.OP_NIL)
+        emitByte(OpCode.OP_RETURN)
     
 def emitBytes(byte1,byte2):
     emitByte(byte1)
@@ -783,12 +860,12 @@ def initCompiler(compiler:Compiler,type:FunctionType):
     global parser 
     local=Local()
     local.depth=0
-    #if type!=FunctionType.TYPE_FUNCTION:
-    #    local.name.start="this"
-    #    local.name.length=4
-    #else:       
-    local.name.start=""
-    local.name.length=0
+    if type!=FunctionType.TYPE_FUNCTION:
+        local.name.start="this"
+        local.name.length=4
+    else:       
+        local.name.start=""
+        local.name.length=0
     local.isCaptured=False
     compiler.locals[0]=local #first slot for internal vm use
     compiler.localCount=1

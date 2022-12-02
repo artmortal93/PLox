@@ -38,6 +38,10 @@ class OpCode(Enum):
     OP_SET_PROPERTY=30
     OP_GET_PROPERTY=31
     OP_METHOD=32
+    OP_INVOKE=33
+    OP_INHERIT=34
+    OP_GET_SUPER=35
+    OP_SUPER_INVOKE=36
         
 class Chunk:
     __slots__ = ["code", "count","capacity","constants","lines"]
